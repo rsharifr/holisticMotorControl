@@ -41,7 +41,7 @@ itmax = 500;
 dCost = 1e6;
 count = 0;
 
-
+fprintf("Solving for OFC's optimal gains.\n")
 
 % The optimal control and Kalman gains are calculated iteratively (no more
 % than itmax times if it does not converge)
@@ -61,7 +61,7 @@ while (dCost>tol) && (count<itmax)
     
 end
 
-fprintf('Number of iterations: %d\n', count); % Number of iterations 
+fprintf('Done. Number of iterations: %d\n', count); % Number of iterations 
 
 ofc.optimalGains.L = L;
 ofc.optimalGains.K = K;
