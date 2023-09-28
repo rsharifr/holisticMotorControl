@@ -19,24 +19,24 @@ targetPos_rel = [0;-0.3]; % relative to initial hand position
 hmn = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, ...
             a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat');
 
-[ofcResult,mskResults] = hmn.simulateHuman(1);
+results = hmn.simulateHuman(1);
 
 %%
-Y_msk = mskResults.Ydata;
-U_msk = mskResults.Udata;
+Y_msk = results.msk_Ydata;
+U_msk = results.msk_Udata;
 
 nStep = hmn.generalParamSet.nStep;
 
 figure(200); clf
 subplot(2,2,1)
-plot(1:nStep,hmn.getOutputs_msk(Y_msk).q,'LineWidth',2)
+plot(1:nStep,hmn.msk.getOutputs(Y_msk).q,'LineWidth',2)
 title('joint angles')
 legend('elbow','shoulder')
 
 subplot(2,2,2); 
-plot(1:nStep,hmn.getOutputs_msk(Y_msk).hand_p,'LineWidth',2)
+plot(1:nStep,hmn.msk.getOutputs(Y_msk).hand_p,'LineWidth',2)
 hold all
-plot(1:nStep,hmn.getOutputs_msk(Y_msk).hand_v,'LineWidth',2)
+plot(1:nStep,hmn.msk.getOutputs(Y_msk).hand_v,'LineWidth',2)
 title("task space")
 legend('x','y','v_x','v_y','Location','best')
 
@@ -46,11 +46,11 @@ title('muscle activations')
 legend('ext bi','flx bi','ext elb','flx elb','ext shd','flx shd','NumColumns',3,'location','best')
 
 subplot(2,2,4);
-plot(1:nStep,hmn.getOutputs_msk(Y_msk).muscleF,'LineWidth',2)
+plot(1:nStep,hmn.msk.getOutputs(Y_msk).muscleF,'LineWidth',2)
  title('muscle force')
 
-X_ofc = ofcResult.Xdata;
-Xest_ofc = ofcResult.XEstdata;
+X_ofc = results.ofc_Xdata;
+Xest_ofc = results.ofc_XEstdata;
 targetPos_abs = hmn.generalParamSet.targetPos_abs;
 
 figure(300); clf

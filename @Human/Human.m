@@ -1,15 +1,12 @@
 classdef Human
 
     properties
-        ofc
-        ofcParamSet
-        ofcResults
-        
-        msk
-        mskParamSet
-        mskResults
-
         generalParamSet
+%         ofc % todo: replace this with a class "MotorControl"
+%         ofcParamSet
+        mc
+        msk
+        results
     end
 
     methods
@@ -25,141 +22,64 @@ classdef Human
             hmn.generalParamSet.Fpert = Fpert;
             hmn.generalParamSet.targetPos_rel = targetPos_rel;
 
-            hmn = hmn.setupMSK(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData);
+            hmn.msk = MusculoskeletalArm(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData);           
             
             startPosition = -targetPos_rel;
-            hmn = hmn.setupOFC(dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
+%             hmn = hmn.setupOFC(dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
+            hmn.mc = MotorController(dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
 
+            hmn.generalParamSet.initialHandPos = hmn.msk.getHandPosition(thetaSH_0,thetaEL_0);
+            hmn.generalParamSet.targetPos_abs = targetPos_rel + hmn.generalParamSet.initialHandPos;
+
+            hmn = setupResultsStruct(hmn);
         end
         
-        %% SETUP MSK
-        function hmn = setupMSK(hmn, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData)
-            hmn.mskParamSet = getParametersPlanarArm();
-            hmn.mskParamSet.Nmuscle = 6;
-            hmn.mskParamSet.armDamping =  armDamping; % [Elbow damping; Shoulder damping]
+        %% SETUP RESULTS STRUCT
+        function hmn = setupResultsStruct(hmn)
+            nStep = hmn.generalParamSet.nStep;
+            dt = hmn.generalParamSet.dt;
 
-            hmn.generalParamSet.initialHandPos = hmn.getHandPosition(thetaSH_0,thetaEL_0);
-            hmn.generalParamSet.targetPos_abs = hmn.generalParamSet.targetPos_rel + hmn.generalParamSet.initialHandPos;
+            % MSK results
+            Nmuscle = hmn.msk.param.Nmuscle;
+            IC = hmn.msk.IC;
+            Y = hmn.msk.Y;
 
-            [IC,Y] = hmn.getIC_msk(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
+            hmn.results.msk_currentX = IC;
+            hmn.results.msk_currentXdot = zeros(size(IC));
+            hmn.results.msk_Xdata = nan(nStep, length(IC));
+            hmn.results.msk_Xdata(1,:) = IC';
 
-            hmn.msk.IC = IC;
+            hmn.results.msk_currentY = Y;
+            hmn.results.msk_Ydata = nan(nStep, length(Y));
+            hmn.results.msk_Ydata(1,:) = Y(:,1)';
 
-            hmn.mskResults.currentX = IC;
-            hmn.mskResults.currentXdot = zeros(size(IC));
-            hmn.mskResults.Xdata = nan(hmn.generalParamSet.nStep, length(IC));
-            hmn.mskResults.Xdata(1,:) = IC';
+            hmn.results.msk_currentU = zeros(Nmuscle,1);
+            hmn.results.msk_Udata = nan(nStep-1, Nmuscle);
 
-            hmn.mskResults.currentY = Y;
-            hmn.mskResults.Ydata = nan(hmn.generalParamSet.nStep, length(Y));
-            hmn.mskResults.Ydata(1,:) = Y(:,1)';
+            hmn.results.msk_t = (0:nStep-1)*dt;
 
-            hmn.mskResults.currentU = zeros(hmn.mskParamSet.Nmuscle,1);
-            hmn.mskResults.Udata = nan(hmn.generalParamSet.nStep-1, hmn.mskParamSet.Nmuscle);
 
-            hmn.mskResults.t = (0:hmn.generalParamSet.nStep-1)*hmn.generalParamSet.dt;
+            % MotorControl Results
+            n = hmn.mc.ofc.systemEq.numberOfStates;
+            m = hmn.mc.ofc.systemEq.numberOfControls;
+            h = hmn.mc.ofc.simSetting.delay;
 
-            hmn = hmn.loadSynergies(pathToSynergyData);
+            hmn.results.ofc_currentX = repmat(hmn.mc.ofc.simSetting.xInit,h+1,1);
+            hmn.results.ofc_Xdata = zeros(nStep,n);
+            hmn.results.ofc_Xdata(1,:) = hmn.results.ofc_currentX';
 
-        end
-
-        %% GET MSK IC
-        function [IC,Y] = getIC_msk(hmn, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0)
-            armDamping = hmn.mskParamSet.armDamping;
-            [IC,Y] = getPlanarArmIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping);            
-        end
-
-        %% GET MSK outputs
-        function outputs = getOutputs_msk(hmn,Y)
-            if exist('Y','var')
-                outputs = getPlanarArmOutputs(Y);
-            else
-                outputs = getPlanarArmOutputs(hmn.mskResults.Ydata);
-            end
-        end
-
-        %% SOLVE MSK MODEL 
-        function [Xdot,X,Y] = solveModel_msk(hmn,F_hand)
-            if ~exist('F_hand','var')
-                F_hand = [0;0];
-            end
-
-            X = hmn.mskResults.currentX;
-            u = hmn.mskResults.currentU;
-            armDamping = hmn.mskParamSet.armDamping;
-
-            [Xdot,X,Y] =PlanarArm(0,X,[F_hand;u],armDamping);
-            hmn.mskResults.currentX = X;
-            hmn.mskResults.currentXdot = Xdot;
-        end
-
-        %% LOAD SYNERGIES
-        function hmn = loadSynergies(hmn,pathToSynergy)
-            data = load(pathToSynergy);
-            hmn.mskParamSet.synergySet = data.synergySet;
-            hmn.mskParamSet.thetaELset = data.thetaELset;
-            hmn.mskParamSet.thetaSHset= data.thetaSHset;
+            hmn.results.ofc_currentXEst = hmn.results.ofc_currentX;
+            hmn.results.ofc_XEstdata = hmn.results.ofc_Xdata;
             
-            hmn.mskParamSet.NoSyn = size(data.synergySet,2);
-        end
+            hmn.results.ofc_currentU = zeros(m,1);
+            hmn.results.ofc_Udata = zeros(nStep-1,m);
 
-        %% SETUP OFC
-        function hmn = setupOFC(hmn,dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
-            [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_pointMass_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
-            hmn.ofc = OFC(A,B,H,Q,R,simSetting,noiseStructure);
-            hmn.ofcParamSet = modelParam;
+            hmn.results.ofc_t = (0:nStep-1)*dt;
 
-            [hmn.ofcParamSet.L,hmn.ofcParamSet.K] = hmn.ofc.getOptimalGains;
-            
-            n = hmn.ofc.systemEq.numberOfStates;
-            m = hmn.ofc.systemEq.numberOfControls;
-            h = hmn.ofc.simSetting.delay;
-
-            hmn.ofcResults.currentX = repmat(xInit,h+1,1);
-            hmn.ofcResults.Xdata = zeros(simSetting.nStep,n);
-            hmn.ofcResults.Xdata(1,:) = hmn.ofcResults.currentX';
-
-            hmn.ofcResults.currentXEst = hmn.ofcResults.currentX;
-            hmn.ofcResults.XEstdata = hmn.ofcResults.Xdata;
-            
-            hmn.ofcResults.currentU = zeros(m,1);
-            hmn.ofcResults.Udata = zeros(simSetting.nStep-1,m);
-
-            hmn.ofcResults.t = (0:simSetting.nStep-1)*dt;
-        end
-
-        %% GET HAND POSITION FROM JOINT ANGLES
-        function [hand, elbow] = getHandPosition(hmn, q_SH,q_EL)
-
-            shoulder = [0;0];
-            elbow = shoulder + [hmn.mskParamSet.a1.*cos(q_SH); hmn.mskParamSet.a1.*sin(q_SH)];
-            hand = elbow + [hmn.mskParamSet.a2.*cos(q_SH+q_EL); hmn.mskParamSet.a2.*sin(q_SH+q_EL)];
-        end
-
-        %% COMPENSATE FOR VELOCITIES IN REFERENCE ACCELERATION
-        function a_tilde = CorrectAccRef(hmn, a_ref,q_SH,q_EL,qdot_SH,qdot_EL,Fhand)
-            % here Fhand is the external force onto the end
-            sys = getParametersPlanarArm;
-            q = [q_SH;q_EL];
-            qdot = [qdot_SH;qdot_EL];
-            X = [q;qdot];
-
-            M = sysEQ_massMatrix(X,sys);
-            J = sysEQ_J(X,sys);
-            C = sysEQ_CMatrix(X,sys);
-            Jdot = sysEQ_Jdot(X,sys);
-
-            % a_tilde = a_ref - Jdot*qdot + J*(M\C)*qdot; % this was the original which seemed to work
-
-            qddot_ref = J\(a_ref - Jdot*qdot);
-
-            qddot_tilde = qddot_ref + M\(-J'*Fhand + C*qdot);
-
-            a_tilde = 0*Jdot*qdot + J*qddot_tilde; % here Jdot*qdot isn't needed becuase the "nominal" condition do not have velocities
         end
 
         %% SIMULATE HUMAN MODEL
-        function [ofcResults,mskResults] = simulateHuman(hmn, plotResults)
+        function results = simulateHuman(hmn, plotResults)
             if plotResults
                 figure("name","hand path")
                 hold all
@@ -168,31 +88,26 @@ classdef Human
             nStep = hmn.generalParamSet.nStep;
             dt = hmn.generalParamSet.dt;
 
-            n = hmn.ofc.systemEq.numberOfStates;
-            m = hmn.ofc.systemEq.numberOfControls;
-            p = hmn.ofc.systemEq.numberOfOutputs;
+            n = hmn.mc.ofc.systemEq.numberOfStates;
+            m = hmn.mc.ofc.systemEq.numberOfControls;
+            p = hmn.mc.ofc.systemEq.numberOfOutputs;
 
-            A = hmn.ofc.systemEq.A;
-            A_sim = hmn.ofc.systemEq.A_sim;
-            B = hmn.ofc.systemEq.B;
-            H = hmn.ofc.systemEq.H;
+            A = hmn.mc.ofc.systemEq.A;
+            A_sim = hmn.mc.ofc.systemEq.A_sim;
+            B = hmn.mc.ofc.systemEq.B;
+            H = hmn.mc.ofc.systemEq.H;
 
-            C = hmn.ofc.noiseConstructors.controlDependentConstructor;
-            D = hmn.ofc.noiseConstructors.stateDependentConstructor;
-            Omega_xi = hmn.ofc.noiseConstructors.additiveProcessNoiseCovar;
-            Omega_omega = hmn.ofc.noiseConstructors.sensoryNoiseCovar;
-            Omega_eta = hmn.ofc.noiseConstructors.internalNoiseCovar;
+            C = hmn.mc.ofc.noiseConstructors.controlDependentConstructor;
+            D = hmn.mc.ofc.noiseConstructors.stateDependentConstructor;
+            Omega_xi = hmn.mc.ofc.noiseConstructors.additiveProcessNoiseCovar;
+            Omega_omega = hmn.mc.ofc.noiseConstructors.sensoryNoiseCovar;
+            Omega_eta = hmn.mc.ofc.noiseConstructors.internalNoiseCovar;
             
-            L = hmn.ofcParamSet.L;
-            K = hmn.ofcParamSet.K;
+            L = hmn.mc.param.L;
+            K = hmn.mc.param.K;
 
-            NoSyn = hmn.mskParamSet.NoSyn;
-            Nmuscle = hmn.mskParamSet.Nmuscle;
-            thetaSHset = hmn.mskParamSet.thetaSHset;
-            thetaELset = hmn.mskParamSet.thetaELset;
-            synergySet = hmn.mskParamSet.synergySet;
 
-            armDamping = hmn.mskParamSet.armDamping;
+            armDamping = hmn.msk.param.armDamping;
             Fpert = hmn.generalParamSet.Fpert;
 
             for i = 1:nStep-1
@@ -209,17 +124,17 @@ classdef Human
                 %     yz = H*hmn.ofcResults.currentX + sensoryNoise + stateDependentNoise;
 
 
-                hmn.ofcResults.currentU = -L(:,:,i)*hmn.ofcResults.currentXEst;
+                hmn.results.ofc_currentU = -L(:,:,i)*hmn.results.ofc_currentXEst;
 
                 controlDependentNoise = 0;
                 for icdn = 1:m
-                    controlDependentNoise = controlDependentNoise + randn*C(:,:,icdn)*hmn.ofcResults.currentU;
+                    controlDependentNoise = controlDependentNoise + randn*C(:,:,icdn)*hmn.results.ofc_currentU;
                 end
 
-                newX_OFC = A_sim(:,:,i)*hmn.ofcResults.currentX + B*hmn.ofcResults.currentU + processNoise + controlDependentNoise;
-                diff_X_ofc = (newX_OFC - hmn.ofcResults.currentX)/dt;
-                hmn.ofcResults.currentX = newX_OFC;
-                hmn.ofcResults.Xdata(i+1,:) = hmn.ofcResults.currentX';
+                newX_OFC = A_sim(:,:,i)*hmn.results.ofc_currentX + B*hmn.results.ofc_currentU + processNoise + controlDependentNoise;
+                diff_X_ofc = (newX_OFC - hmn.results.ofc_currentX)/dt;
+                hmn.results.ofc_currentX = newX_OFC;
+                hmn.results.ofc_Xdata(i+1,:) = hmn.results.ofc_currentX';
 
 
                 %%%%%%% Generate high-level commands
@@ -230,63 +145,65 @@ classdef Human
                 %     a_ref_ofc = hmn.ofcResults.currentU;
 
                 %%%%%%% MSK's step
-                q_SH = hmn.getOutputs_msk(hmn.mskResults.currentY).q(1);
-                q_EL = hmn.getOutputs_msk(hmn.mskResults.currentY).q(2);
-                qdot_SH = hmn.getOutputs_msk(hmn.mskResults.currentY).qdot(1);
-                qdot_EL = hmn.getOutputs_msk(hmn.mskResults.currentY).qdot(2);
+                mskOutputs = hmn.msk.getOutputs(hmn.results.msk_currentY);
+                q_SH = mskOutputs.q(1);
+                q_EL = mskOutputs.q(2);
+                qdot_SH = mskOutputs.qdot(1);
+                qdot_EL = mskOutputs.qdot(2);
 
-                Fpert_est = hmn.ofcResults.currentXEst(7:8);
+                Fpert_est = hmn.results.ofc_currentXEst(7:8);
 
-                syn = interpn(1:Nmuscle,1:NoSyn,thetaSHset,thetaELset,  synergySet  ,1:Nmuscle,1:NoSyn,q_SH,q_EL);
-                [basis_acc,basis_F] = calcBasis(syn, q_SH,q_EL,armDamping);
+%                 syn = interpn(1:Nmuscle,1:NoSyn,thetaSHset,thetaELset,  synergySet  ,1:Nmuscle,1:NoSyn,q_SH,q_EL);
+                syn = hmn.msk.interpolateSynergies(q_SH,q_EL);
+                [basis_acc,basis_F] = hmn.msk.calcBasis(syn, q_SH,q_EL);
 
-                a_ref_tilde = hmn.CorrectAccRef(a_ref_ofc,q_SH,q_EL,qdot_SH,qdot_EL,Fpert_est);
+                a_ref_tilde = hmn.msk.CorrectAccRef(a_ref_ofc,q_SH,q_EL,qdot_SH,qdot_EL,Fpert_est);
 
                 coeff = lsqnonneg(basis_acc,a_ref_tilde);
                 % coeff = lsqnonneg(basis_F,F_ref_ofc);
-                hmn.mskResults.currentU = syn*coeff;
-                hmn.mskResults.currentU = min(1,max(0,hmn.mskResults.currentU));
-                hmn.mskResults.currentU = hmn.mskResults.currentU .* (1+0.02*randn(size(hmn.mskResults.currentU)));
+                hmn.results.msk_currentU = syn*coeff;
+                hmn.results.msk_currentU = min(1,max(0,hmn.results.msk_currentU));
+                hmn.results.msk_currentU = hmn.results.msk_currentU .* (1+0.02*randn(size(hmn.results.msk_currentU))); % todo: fix this noise
 
 
-                [hmn.mskResults.currentXdot, ~, hmn.mskResults.currentY] = PlanarArm(0,hmn.mskResults.currentX,[Fpert(2);Fpert(1);hmn.mskResults.currentU],armDamping);
+                [hmn.results.msk_currentXdot, ~, hmn.results.msk_currentY] = PlanarArm(0,hmn.results.msk_currentX,[Fpert(2);Fpert(1);hmn.results.msk_currentU],armDamping);
                 
-                hmn.mskResults.Udata(i,:) = hmn.mskResults.currentU';
-                hmn.mskResults.Ydata(i,:) = hmn.mskResults.currentY';
-                hmn.mskResults.Xdata(i,:) = hmn.mskResults.currentX';
-                hmn.mskResults.currentX = hmn.mskResults.currentX + hmn.mskResults.currentXdot * dt;
+                hmn.results.msk_Udata(i,:) = hmn.results.msk_currentU';
+                hmn.results.msk_Ydata(i,:) = hmn.results.msk_currentY';
+                hmn.results.msk_Xdata(i,:) = hmn.results.msk_currentX';
+                hmn.results.msk_currentX = hmn.results.msk_currentX + hmn.results.msk_currentXdot * dt;
 
                 %%%%%%% Estimator's integration step
-                handPos = hmn.getOutputs_msk(hmn.mskResults.currentY).hand_p - hmn.generalParamSet.targetPos_abs;
-                handVel = hmn.getOutputs_msk(hmn.mskResults.currentY).hand_v;
+                mskOutputs = hmn.msk.getOutputs(hmn.results.msk_currentY);
+                handPos = mskOutputs.hand_p - hmn.generalParamSet.targetPos_abs;
+                handVel = mskOutputs.hand_v;
 
                 stateDependentNoise = 0;
                 for isdn = 1:size(D,3)
-                    stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*hmn.ofcResults.currentX; 
+                    stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*hmn.results.ofc_currentX; 
                 end
-                yz = [handPos; handVel; hmn.ofcResults.currentX(5:6); Fpert] + sensoryNoise + stateDependentNoise;
+                yz = [handPos; handVel; hmn.results.ofc_currentX(5:6); Fpert] + sensoryNoise + stateDependentNoise;
 
-                newXEst_ofc = A(:,:,i)*hmn.ofcResults.currentXEst + B*hmn.ofcResults.currentU + K(:,:,i)*(yz-H*hmn.ofcResults.currentXEst) + internalNoise;
-                diff_XEst_ofc = (newXEst_ofc - hmn.ofcResults.currentXEst)/dt;
-                hmn.ofcResults.XEstdata(i,:) = hmn.ofcResults.currentXEst';
-                hmn.ofcResults.currentXEst = newXEst_ofc; %TODO check i or i+1, both here and above
+                newXEst_ofc = A(:,:,i)*hmn.results.ofc_currentXEst + B*hmn.results.ofc_currentU + K(:,:,i)*(yz-H*hmn.results.ofc_currentXEst) + internalNoise;
+                diff_XEst_ofc = (newXEst_ofc - hmn.results.ofc_currentXEst)/dt;
+                hmn.results.ofc_XEstdata(i,:) = hmn.results.ofc_currentXEst';
+                hmn.results.ofc_currentXEst = newXEst_ofc; %TODO check i or i+1, both here and above
 
                 %%%%%%% plot this arm path
                 if plotResults && mod(i,10)==1
                     cmap = copper(nStep);
-                    [hnd, elb] = hmn.getHandPosition(q_SH,q_EL);
+                    [hnd, elb] = hmn.msk.getHandPosition(q_SH,q_EL);
                     plot([0,elb(1),hnd(1)], [0,elb(2),hnd(2)],'-o','LineWidth',2,'Color',cmap(i,:))
-                    scatter(hmn.ofcResults.currentX(1)+hmn.generalParamSet.targetPos_abs(1), hmn.ofcResults.currentX(2)+hmn.generalParamSet.targetPos_abs(2),'s','filled')
-                    scatter(hmn.ofcResults.currentXEst(1)+hmn.generalParamSet.targetPos_abs(1), hmn.ofcResults.currentXEst(2)+hmn.generalParamSet.targetPos_abs(2),100,'x','MarkerEdgeColor','r','LineWidth',2)
+                    scatter(hmn.results.ofc_currentX(1)+hmn.generalParamSet.targetPos_abs(1), hmn.results.ofc_currentX(2)+hmn.generalParamSet.targetPos_abs(2),'s','filled')
+                    scatter(hmn.results.ofc_currentXEst(1)+hmn.generalParamSet.targetPos_abs(1), hmn.results.ofc_currentXEst(2)+hmn.generalParamSet.targetPos_abs(2),100,'x','MarkerEdgeColor','r','LineWidth',2)
                 end
 
             end
 
-            hmn.ofcResults.Xdata = hmn.ofcResults.Xdata(:,1:hmn.ofc.systemEq.numberOfOriginalStates);
-            hmn.ofcResults.XEstdata = hmn.ofcResults.XEstdata(:,1:hmn.ofc.systemEq.numberOfOriginalStates);
+            hmn.results.ofc_Xdata = hmn.results.ofc_Xdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
+            hmn.results.ofc_XEstdata = hmn.results.ofc_XEstdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
 
-            ofcResults = hmn.ofcResults;
-            mskResults = hmn.mskResults;
+            results = hmn.results;
         end
 
     %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
