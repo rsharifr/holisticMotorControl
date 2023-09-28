@@ -18,126 +18,126 @@ classdef Human
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         
         %% CONSTRUCTOR        
-        function obj = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert, pathToSynergyData)
-            obj.generalParamSet.dt = dt;
-            obj.generalParamSet.tEnd = tEnd;
-            obj.generalParamSet.nStep = round(tEnd/dt) + numberOfStationarySteps;
-            obj.generalParamSet.Fpert = Fpert;
-            obj.generalParamSet.targetPos_rel = targetPos_rel;
+        function hmn = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert, pathToSynergyData)
+            hmn.generalParamSet.dt = dt;
+            hmn.generalParamSet.tEnd = tEnd;
+            hmn.generalParamSet.nStep = round(tEnd/dt) + numberOfStationarySteps;
+            hmn.generalParamSet.Fpert = Fpert;
+            hmn.generalParamSet.targetPos_rel = targetPos_rel;
 
-            obj = obj.setupMSK(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData);
+            hmn = hmn.setupMSK(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData);
             
             startPosition = -targetPos_rel;
-            obj = obj.setupOFC(dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
+            hmn = hmn.setupOFC(dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
 
         end
         
         %% SETUP MSK
-        function obj = setupMSK(obj, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData)
-            obj.mskParamSet = getParametersPlanarArm();
-            obj.mskParamSet.Nmuscle = 6;
-            obj.mskParamSet.armDamping =  armDamping; % [Elbow damping; Shoulder damping]
+        function hmn = setupMSK(hmn, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergyData)
+            hmn.mskParamSet = getParametersPlanarArm();
+            hmn.mskParamSet.Nmuscle = 6;
+            hmn.mskParamSet.armDamping =  armDamping; % [Elbow damping; Shoulder damping]
 
-            obj.generalParamSet.initialHandPos = obj.getHandPosition(thetaSH_0,thetaEL_0);
-            obj.generalParamSet.targetPos_abs = obj.generalParamSet.targetPos_rel + obj.generalParamSet.initialHandPos;
+            hmn.generalParamSet.initialHandPos = hmn.getHandPosition(thetaSH_0,thetaEL_0);
+            hmn.generalParamSet.targetPos_abs = hmn.generalParamSet.targetPos_rel + hmn.generalParamSet.initialHandPos;
 
-            [IC,Y] = obj.getIC_msk(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
+            [IC,Y] = hmn.getIC_msk(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
 
-            obj.msk.IC = IC;
+            hmn.msk.IC = IC;
 
-            obj.mskResults.currentX = IC;
-            obj.mskResults.currentXdot = zeros(size(IC));
-            obj.mskResults.Xdata = nan(obj.generalParamSet.nStep, length(IC));
-            obj.mskResults.Xdata(1,:) = IC';
+            hmn.mskResults.currentX = IC;
+            hmn.mskResults.currentXdot = zeros(size(IC));
+            hmn.mskResults.Xdata = nan(hmn.generalParamSet.nStep, length(IC));
+            hmn.mskResults.Xdata(1,:) = IC';
 
-            obj.mskResults.currentY = Y;
-            obj.mskResults.Ydata = nan(obj.generalParamSet.nStep, length(Y));
-            obj.mskResults.Ydata(1,:) = Y(:,1)';
+            hmn.mskResults.currentY = Y;
+            hmn.mskResults.Ydata = nan(hmn.generalParamSet.nStep, length(Y));
+            hmn.mskResults.Ydata(1,:) = Y(:,1)';
 
-            obj.mskResults.currentU = zeros(obj.mskParamSet.Nmuscle,1);
-            obj.mskResults.Udata = nan(obj.generalParamSet.nStep-1, obj.mskParamSet.Nmuscle);
+            hmn.mskResults.currentU = zeros(hmn.mskParamSet.Nmuscle,1);
+            hmn.mskResults.Udata = nan(hmn.generalParamSet.nStep-1, hmn.mskParamSet.Nmuscle);
 
-            obj.mskResults.t = (0:obj.generalParamSet.nStep-1)*obj.generalParamSet.dt;
+            hmn.mskResults.t = (0:hmn.generalParamSet.nStep-1)*hmn.generalParamSet.dt;
 
-            obj = obj.loadSynergies(pathToSynergyData);
+            hmn = hmn.loadSynergies(pathToSynergyData);
 
         end
 
         %% GET MSK IC
-        function [IC,Y] = getIC_msk(obj, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0)
-            armDamping = obj.mskParamSet.armDamping;
+        function [IC,Y] = getIC_msk(hmn, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0)
+            armDamping = hmn.mskParamSet.armDamping;
             [IC,Y] = getPlanarArmIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping);            
         end
 
         %% GET MSK outputs
-        function outputs = getOutputs_msk(obj,Y)
+        function outputs = getOutputs_msk(hmn,Y)
             if exist('Y','var')
                 outputs = getPlanarArmOutputs(Y);
             else
-                outputs = getPlanarArmOutputs(obj.mskResults.Ydata);
+                outputs = getPlanarArmOutputs(hmn.mskResults.Ydata);
             end
         end
 
         %% SOLVE MSK MODEL 
-        function [Xdot,X,Y] = solveModel_msk(obj,F_hand)
+        function [Xdot,X,Y] = solveModel_msk(hmn,F_hand)
             if ~exist('F_hand','var')
                 F_hand = [0;0];
             end
 
-            X = obj.mskResults.currentX;
-            u = obj.mskResults.currentU;
-            armDamping = obj.mskParamSet.armDamping;
+            X = hmn.mskResults.currentX;
+            u = hmn.mskResults.currentU;
+            armDamping = hmn.mskParamSet.armDamping;
 
             [Xdot,X,Y] =PlanarArm(0,X,[F_hand;u],armDamping);
-            obj.mskResults.currentX = X;
-            obj.mskResults.currentXdot = Xdot;
+            hmn.mskResults.currentX = X;
+            hmn.mskResults.currentXdot = Xdot;
         end
 
         %% LOAD SYNERGIES
-        function obj = loadSynergies(obj,pathToSynergy)
+        function hmn = loadSynergies(hmn,pathToSynergy)
             data = load(pathToSynergy);
-            obj.mskParamSet.synergySet = data.synergySet;
-            obj.mskParamSet.thetaELset = data.thetaELset;
-            obj.mskParamSet.thetaSHset= data.thetaSHset;
+            hmn.mskParamSet.synergySet = data.synergySet;
+            hmn.mskParamSet.thetaELset = data.thetaELset;
+            hmn.mskParamSet.thetaSHset= data.thetaSHset;
             
-            obj.mskParamSet.NoSyn = size(data.synergySet,2);
+            hmn.mskParamSet.NoSyn = size(data.synergySet,2);
         end
 
         %% SETUP OFC
-        function obj = setupOFC(obj,dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
-            [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupOFCmodel_pointMass_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
-            obj.ofc = OFC(A,B,H,Q,R,simSetting,noiseStructure);
-            obj.ofcParamSet = modelParam;
+        function hmn = setupOFC(hmn,dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
+            [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_pointMass_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
+            hmn.ofc = OFC(A,B,H,Q,R,simSetting,noiseStructure);
+            hmn.ofcParamSet = modelParam;
 
-            [obj.ofcParamSet.L,obj.ofcParamSet.K] = obj.ofc.getOptimalGains;
+            [hmn.ofcParamSet.L,hmn.ofcParamSet.K] = hmn.ofc.getOptimalGains;
             
-            n = obj.ofc.systemEq.numberOfStates;
-            m = obj.ofc.systemEq.numberOfControls;
-            h = obj.ofc.simSetting.delay;
+            n = hmn.ofc.systemEq.numberOfStates;
+            m = hmn.ofc.systemEq.numberOfControls;
+            h = hmn.ofc.simSetting.delay;
 
-            obj.ofcResults.currentX = repmat(xInit,h+1,1);
-            obj.ofcResults.Xdata = zeros(simSetting.nStep,n);
-            obj.ofcResults.Xdata(1,:) = obj.ofcResults.currentX';
+            hmn.ofcResults.currentX = repmat(xInit,h+1,1);
+            hmn.ofcResults.Xdata = zeros(simSetting.nStep,n);
+            hmn.ofcResults.Xdata(1,:) = hmn.ofcResults.currentX';
 
-            obj.ofcResults.currentXEst = obj.ofcResults.currentX;
-            obj.ofcResults.XEstdata = obj.ofcResults.Xdata;
+            hmn.ofcResults.currentXEst = hmn.ofcResults.currentX;
+            hmn.ofcResults.XEstdata = hmn.ofcResults.Xdata;
             
-            obj.ofcResults.currentU = zeros(m,1);
-            obj.ofcResults.Udata = zeros(simSetting.nStep-1,m);
+            hmn.ofcResults.currentU = zeros(m,1);
+            hmn.ofcResults.Udata = zeros(simSetting.nStep-1,m);
 
-            obj.ofcResults.t = (0:simSetting.nStep-1)*dt;
+            hmn.ofcResults.t = (0:simSetting.nStep-1)*dt;
         end
 
-        %%
-        function [hand, elbow] = getHandPosition(obj, q_SH,q_EL)
+        %% GET HAND POSITION FROM JOINT ANGLES
+        function [hand, elbow] = getHandPosition(hmn, q_SH,q_EL)
 
             shoulder = [0;0];
-            elbow = shoulder + [obj.mskParamSet.a1.*cos(q_SH); obj.mskParamSet.a1.*sin(q_SH)];
-            hand = elbow + [obj.mskParamSet.a2.*cos(q_SH+q_EL); obj.mskParamSet.a2.*sin(q_SH+q_EL)];
+            elbow = shoulder + [hmn.mskParamSet.a1.*cos(q_SH); hmn.mskParamSet.a1.*sin(q_SH)];
+            hand = elbow + [hmn.mskParamSet.a2.*cos(q_SH+q_EL); hmn.mskParamSet.a2.*sin(q_SH+q_EL)];
         end
 
-        %%
-        function a_tilde = CorrectAccRef(obj, a_ref,q_SH,q_EL,qdot_SH,qdot_EL,Fhand)
+        %% COMPENSATE FOR VELOCITIES IN REFERENCE ACCELERATION
+        function a_tilde = CorrectAccRef(hmn, a_ref,q_SH,q_EL,qdot_SH,qdot_EL,Fhand)
             % here Fhand is the external force onto the end
             sys = getParametersPlanarArm;
             q = [q_SH;q_EL];
@@ -159,41 +159,41 @@ classdef Human
         end
 
         %% SIMULATE HUMAN MODEL
-        function [ofcResults,mskResults] = simulateHuman(obj, plotResults)
+        function [ofcResults,mskResults] = simulateHuman(hmn, plotResults)
             if plotResults
                 figure("name","hand path")
                 hold all
                 axis equal
             end
-            nStep = obj.generalParamSet.nStep;
-            dt = obj.generalParamSet.dt;
+            nStep = hmn.generalParamSet.nStep;
+            dt = hmn.generalParamSet.dt;
 
-            n = obj.ofc.systemEq.numberOfStates;
-            m = obj.ofc.systemEq.numberOfControls;
-            p = obj.ofc.systemEq.numberOfOutputs;
+            n = hmn.ofc.systemEq.numberOfStates;
+            m = hmn.ofc.systemEq.numberOfControls;
+            p = hmn.ofc.systemEq.numberOfOutputs;
 
-            A = obj.ofc.systemEq.A;
-            A_sim = obj.ofc.systemEq.A_sim;
-            B = obj.ofc.systemEq.B;
-            H = obj.ofc.systemEq.H;
+            A = hmn.ofc.systemEq.A;
+            A_sim = hmn.ofc.systemEq.A_sim;
+            B = hmn.ofc.systemEq.B;
+            H = hmn.ofc.systemEq.H;
 
-            C = obj.ofc.noiseConstructors.controlDependentConstructor;
-            D = obj.ofc.noiseConstructors.stateDependentConstructor;
-            Omega_xi = obj.ofc.noiseConstructors.additiveProcessNoiseCovar;
-            Omega_omega = obj.ofc.noiseConstructors.sensoryNoiseCovar;
-            Omega_eta = obj.ofc.noiseConstructors.internalNoiseCovar;
+            C = hmn.ofc.noiseConstructors.controlDependentConstructor;
+            D = hmn.ofc.noiseConstructors.stateDependentConstructor;
+            Omega_xi = hmn.ofc.noiseConstructors.additiveProcessNoiseCovar;
+            Omega_omega = hmn.ofc.noiseConstructors.sensoryNoiseCovar;
+            Omega_eta = hmn.ofc.noiseConstructors.internalNoiseCovar;
             
-            L = obj.ofcParamSet.L;
-            K = obj.ofcParamSet.K;
+            L = hmn.ofcParamSet.L;
+            K = hmn.ofcParamSet.K;
 
-            NoSyn = obj.mskParamSet.NoSyn;
-            Nmuscle = obj.mskParamSet.Nmuscle;
-            thetaSHset = obj.mskParamSet.thetaSHset;
-            thetaELset = obj.mskParamSet.thetaELset;
-            synergySet = obj.mskParamSet.synergySet;
+            NoSyn = hmn.mskParamSet.NoSyn;
+            Nmuscle = hmn.mskParamSet.Nmuscle;
+            thetaSHset = hmn.mskParamSet.thetaSHset;
+            thetaELset = hmn.mskParamSet.thetaELset;
+            synergySet = hmn.mskParamSet.synergySet;
 
-            armDamping = obj.mskParamSet.armDamping;
-            Fpert = obj.generalParamSet.Fpert;
+            armDamping = hmn.mskParamSet.armDamping;
+            Fpert = hmn.generalParamSet.Fpert;
 
             for i = 1:nStep-1
                 %%%%%% OFC's integral step
@@ -201,91 +201,92 @@ classdef Human
                 processNoise = mvnrnd(zeros(n,1),Omega_xi)';
                 internalNoise = mvnrnd(zeros(n,1),Omega_eta)';
 
-                % use this to decouple OFC from MSK. good for OFC debugging
+                % use this to decouple OFC from MSK. Useful for OFC debugging
                 %     stateDependentNoise = 0;
                 %     for isdn = 1:size(D,3)
-                %         stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*obj.ofcResults.Xdata(i,:)';
+                %         stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*hmn.ofcResults.Xdata(i,:)';
                 %     end
-                %     yz = H*obj.ofcResults.currentX + sensoryNoise + stateDependentNoise;
+                %     yz = H*hmn.ofcResults.currentX + sensoryNoise + stateDependentNoise;
 
 
-                obj.ofcResults.currentU = -L(:,:,i)*obj.ofcResults.currentXEst;
+                hmn.ofcResults.currentU = -L(:,:,i)*hmn.ofcResults.currentXEst;
 
                 controlDependentNoise = 0;
                 for icdn = 1:m
-                    controlDependentNoise = controlDependentNoise + randn*C(:,:,icdn)*obj.ofcResults.currentU;
+                    controlDependentNoise = controlDependentNoise + randn*C(:,:,icdn)*hmn.ofcResults.currentU;
                 end
 
-                newX_OFC = A_sim(:,:,i)*obj.ofcResults.currentX + B*obj.ofcResults.currentU + processNoise + controlDependentNoise;
-                diff_X_ofc = (newX_OFC - obj.ofcResults.currentX)/dt;
-                obj.ofcResults.currentX = newX_OFC;
-                obj.ofcResults.Xdata(i+1,:) = obj.ofcResults.currentX';
+                newX_OFC = A_sim(:,:,i)*hmn.ofcResults.currentX + B*hmn.ofcResults.currentU + processNoise + controlDependentNoise;
+                diff_X_ofc = (newX_OFC - hmn.ofcResults.currentX)/dt;
+                hmn.ofcResults.currentX = newX_OFC;
+                hmn.ofcResults.Xdata(i+1,:) = hmn.ofcResults.currentX';
 
 
                 %%%%%%% Generate high-level commands
 
                 a_ref_ofc = diff_X_ofc(3:4); % this works better
                 %     a_ref_ofc = diff_XEst_ofc(3:4);
-%                 F_ref_ofc = obj.ofcResults.currentX(5:6);
-                %     a_ref_ofc = obj.ofcResults.currentU;
-                %%%%%%% MSK's step
-                q_SH = obj.getOutputs_msk(obj.mskResults.currentY).q(1);
-                q_EL = obj.getOutputs_msk(obj.mskResults.currentY).q(2);
-                qdot_SH = obj.getOutputs_msk(obj.mskResults.currentY).qdot(1);
-                qdot_EL = obj.getOutputs_msk(obj.mskResults.currentY).qdot(2);
+%                 F_ref_ofc = hmn.ofcResults.currentX(5:6);
+                %     a_ref_ofc = hmn.ofcResults.currentU;
 
-                Fpert_est = obj.ofcResults.currentXEst(7:8);
+                %%%%%%% MSK's step
+                q_SH = hmn.getOutputs_msk(hmn.mskResults.currentY).q(1);
+                q_EL = hmn.getOutputs_msk(hmn.mskResults.currentY).q(2);
+                qdot_SH = hmn.getOutputs_msk(hmn.mskResults.currentY).qdot(1);
+                qdot_EL = hmn.getOutputs_msk(hmn.mskResults.currentY).qdot(2);
+
+                Fpert_est = hmn.ofcResults.currentXEst(7:8);
 
                 syn = interpn(1:Nmuscle,1:NoSyn,thetaSHset,thetaELset,  synergySet  ,1:Nmuscle,1:NoSyn,q_SH,q_EL);
                 [basis_acc,basis_F] = calcBasis(syn, q_SH,q_EL,armDamping);
 
-                a_ref_tilde = obj.CorrectAccRef(a_ref_ofc,q_SH,q_EL,qdot_SH,qdot_EL,Fpert_est);
+                a_ref_tilde = hmn.CorrectAccRef(a_ref_ofc,q_SH,q_EL,qdot_SH,qdot_EL,Fpert_est);
 
                 coeff = lsqnonneg(basis_acc,a_ref_tilde);
                 % coeff = lsqnonneg(basis_F,F_ref_ofc);
-                obj.mskResults.currentU = syn*coeff;
-                obj.mskResults.currentU = min(1,max(0,obj.mskResults.currentU));
-                obj.mskResults.currentU = obj.mskResults.currentU .* (1+0.05*randn(size(obj.mskResults.currentU)));
+                hmn.mskResults.currentU = syn*coeff;
+                hmn.mskResults.currentU = min(1,max(0,hmn.mskResults.currentU));
+                hmn.mskResults.currentU = hmn.mskResults.currentU .* (1+0.02*randn(size(hmn.mskResults.currentU)));
 
 
-                [obj.mskResults.currentXdot, ~, obj.mskResults.currentY] = PlanarArm(0,obj.mskResults.currentX,[Fpert(2);Fpert(1);obj.mskResults.currentU],armDamping);
+                [hmn.mskResults.currentXdot, ~, hmn.mskResults.currentY] = PlanarArm(0,hmn.mskResults.currentX,[Fpert(2);Fpert(1);hmn.mskResults.currentU],armDamping);
                 
-                obj.mskResults.Udata(i,:) = obj.mskResults.currentU';
-                obj.mskResults.Ydata(i,:) = obj.mskResults.currentY';
-                obj.mskResults.Xdata(i,:) = obj.mskResults.currentX';
-                obj.mskResults.currentX = obj.mskResults.currentX + obj.mskResults.currentXdot * dt;
+                hmn.mskResults.Udata(i,:) = hmn.mskResults.currentU';
+                hmn.mskResults.Ydata(i,:) = hmn.mskResults.currentY';
+                hmn.mskResults.Xdata(i,:) = hmn.mskResults.currentX';
+                hmn.mskResults.currentX = hmn.mskResults.currentX + hmn.mskResults.currentXdot * dt;
 
                 %%%%%%% Estimator's integration step
-                handPos = obj.getOutputs_msk(obj.mskResults.currentY).hand_p - obj.generalParamSet.targetPos_abs;
-                handVel = obj.getOutputs_msk(obj.mskResults.currentY).hand_v;
+                handPos = hmn.getOutputs_msk(hmn.mskResults.currentY).hand_p - hmn.generalParamSet.targetPos_abs;
+                handVel = hmn.getOutputs_msk(hmn.mskResults.currentY).hand_v;
 
                 stateDependentNoise = 0;
                 for isdn = 1:size(D,3)
-                    stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*obj.ofcResults.currentX; 
+                    stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*hmn.ofcResults.currentX; 
                 end
-                yz = [handPos; handVel; obj.ofcResults.currentX(5:6); Fpert] + sensoryNoise + stateDependentNoise;
+                yz = [handPos; handVel; hmn.ofcResults.currentX(5:6); Fpert] + sensoryNoise + stateDependentNoise;
 
-                newXEst_ofc = A(:,:,i)*obj.ofcResults.currentXEst + B*obj.ofcResults.currentU + K(:,:,i)*(yz-H*obj.ofcResults.currentXEst) + internalNoise;
-                diff_XEst_ofc = (newXEst_ofc - obj.ofcResults.currentXEst)/dt;
-                obj.ofcResults.XEstdata(i,:) = obj.ofcResults.currentXEst';
-                obj.ofcResults.currentXEst = newXEst_ofc; %TODO check i or i+1, both here and above
+                newXEst_ofc = A(:,:,i)*hmn.ofcResults.currentXEst + B*hmn.ofcResults.currentU + K(:,:,i)*(yz-H*hmn.ofcResults.currentXEst) + internalNoise;
+                diff_XEst_ofc = (newXEst_ofc - hmn.ofcResults.currentXEst)/dt;
+                hmn.ofcResults.XEstdata(i,:) = hmn.ofcResults.currentXEst';
+                hmn.ofcResults.currentXEst = newXEst_ofc; %TODO check i or i+1, both here and above
 
                 %%%%%%% plot this arm path
                 if plotResults && mod(i,10)==1
                     cmap = copper(nStep);
-                    [hnd, elb] = obj.getHandPosition(q_SH,q_EL);
+                    [hnd, elb] = hmn.getHandPosition(q_SH,q_EL);
                     plot([0,elb(1),hnd(1)], [0,elb(2),hnd(2)],'-o','LineWidth',2,'Color',cmap(i,:))
-                    scatter(obj.ofcResults.currentX(1)+obj.generalParamSet.targetPos_abs(1), obj.ofcResults.currentX(2)+obj.generalParamSet.targetPos_abs(2),'s','filled')
-                    scatter(obj.ofcResults.currentXEst(1)+obj.generalParamSet.targetPos_abs(1), obj.ofcResults.currentXEst(2)+obj.generalParamSet.targetPos_abs(2),100,'x','MarkerEdgeColor','r','LineWidth',2)
+                    scatter(hmn.ofcResults.currentX(1)+hmn.generalParamSet.targetPos_abs(1), hmn.ofcResults.currentX(2)+hmn.generalParamSet.targetPos_abs(2),'s','filled')
+                    scatter(hmn.ofcResults.currentXEst(1)+hmn.generalParamSet.targetPos_abs(1), hmn.ofcResults.currentXEst(2)+hmn.generalParamSet.targetPos_abs(2),100,'x','MarkerEdgeColor','r','LineWidth',2)
                 end
 
             end
 
-            obj.ofcResults.Xdata = obj.ofcResults.Xdata(:,1:obj.ofc.systemEq.numberOfOriginalStates);
-            obj.ofcResults.XEstdata = obj.ofcResults.XEstdata(:,1:obj.ofc.systemEq.numberOfOriginalStates);
+            hmn.ofcResults.Xdata = hmn.ofcResults.Xdata(:,1:hmn.ofc.systemEq.numberOfOriginalStates);
+            hmn.ofcResults.XEstdata = hmn.ofcResults.XEstdata(:,1:hmn.ofc.systemEq.numberOfOriginalStates);
 
-            ofcResults = obj.ofcResults;
-            mskResults = obj.mskResults;
+            ofcResults = hmn.ofcResults;
+            mskResults = hmn.mskResults;
         end
 
     %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -1,4 +1,4 @@
-function [IC, y, xdot] = getPlanarArmIC(qEL, qdotEL, qSH, qdotSH, a_IC, parameters)
+function out = getPlanarArmStates(X)
 % * State variable(s):
 % *    x[ 0] = `Main.PlanarArm.MuscleArm1.BiExtensor.activationDynamics1.a`(t)
 % *    x[ 1] = `Main.PlanarArm.MuscleArm1.BiFlexor.activationDynamics1.a`(t)
@@ -11,10 +11,6 @@ function [IC, y, xdot] = getPlanarArmIC(qEL, qdotEL, qSH, qdotSH, a_IC, paramete
 % *    x[ 8] = `Main.PlanarArm.MuscleArm1.zShoulder.theta`(t)
 % *    x[ 9] = diff(`Main.PlanarArm.MuscleArm1.zShoulder.theta`(t),t)
 
-IC = zeros(10,1);
-IC(1:6) = a_IC;
-IC(7) =  qEL; % elbow angle
-IC(8) = qdotEL;
-IC(9) =  qSH; % shoulder angle
-IC(10) = qdotSH;
-[xdot, IC, y] = PlanarArm(0,IC,zeros(8,1),parameters);
+out.q = X([9,7]);
+out.qdot = X([10,8]);
+out.a = X([1:6]);

@@ -1,4 +1,4 @@
-function [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupOFCmodel_pointMass_effort(startPosition, deltaT, tEnd, numberOfStationarySteps,f_pert)
+function [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_pointMass_effort(startPosition, deltaT, tEnd, numberOfStationarySteps,f_pert)
 %% %%%%%%%%% continuous system dynamics %%%%%%%%%%%
 nStep = round(tEnd/deltaT) + numberOfStationarySteps;
 
@@ -60,7 +60,7 @@ c = 0.2; % multiplicative noise factor for control-dependent noise
 d = 0; % multiplicative noise factor for state-dependent noise 
 xi = 2e-7; % process noise factor
 omega = 1e-6; % sensory noise factor
-eta = 1e-8; % internal noise factor
+eta = 1e-9; % internal noise factor
 
 
 %% %%%%%%%%% Initial condition and penalties %%%%%%%%%%%
