@@ -1,4 +1,4 @@
-classdef MotorController
+classdef MotorController < matlab.mixin.SetGet
 
     properties
         ofc
@@ -6,10 +6,9 @@ classdef MotorController
         internalStates
     end
 
-    methods
+    methods 
+        %% CONSTRUCTOR
         function mc = MotorController(dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
-            %UNTITLED7 Construct an instance of this class
-            %   Detailed explanation goes here
             mc = setupOFC(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
         end
     %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -33,7 +32,7 @@ classdef MotorController
         end
 
         %% UPDATE ESTIMATOR
-        function [mc, XEst_new] = updateEstimator(mc, yz)
+        function [XEst_new, mc] = updateEstimator(mc, yz)
             p = mc.ofc.systemEq.numberOfOutputs;
             n = mc.ofc.systemEq.numberOfStates;
             Omega_omega = mc.ofc.noiseConstructors.sensoryNoiseCovar;
@@ -60,14 +59,14 @@ classdef MotorController
         end
 
         %% UPDATE INTERNAL MODEL STATES
-        function [mc, X_new] = updateInternalModel(mc)
+        function [X_new, mc] = updateInternalModel(mc)
             C = mc.ofc.noiseConstructors.controlDependentConstructor;
             n = mc.ofc.systemEq.numberOfStates;
             Omega_xi = mc.ofc.noiseConstructors.additiveProcessNoiseCovar;
             
             processNoise = mvnrnd(zeros(n,1),Omega_xi)';
             controlDependentNoise = 0;
-            for icdn = 1:m
+            for icdn = 1:size(C,3)
                 controlDependentNoise = controlDependentNoise + randn*C(:,:,icdn)*mc.internalStates.U;
             end
 
@@ -77,13 +76,28 @@ classdef MotorController
 
             X_new = A_sim(:,:,i)*mc.internalStates.X + B*mc.internalStates.U + processNoise + controlDependentNoise;
             mc.internalStates.X = X_new;
-
         end
         %% CALCULATE CONTROL
-        function U = getControlCommand(mc)
+        function [U, mc] = getControlCommand(mc)
             i = mc.internalStates.timeIndex;
             L = mc.param.L;
             U = -L(:,:,i)*mc.internalStates.XEst;
+            mc.internalStates.U = U;
         end        
+        %% INCREMENT INTERNAL TIME
+        function [timeIndex_new, mc] = incrementInternalTime(mc)
+            timeIndex_new = mc.internalStates.timeIndex + 1;
+            mc.internalStates.timeIndex = timeIndex_new;
+        end
+        %% CONSTRUCT MEASUREMENT FEEDBACK VECTOR
+        function y = updateFeedback(mc, mskOutputs, targetPos_abs, Fpert)
+            handPos = mskOutputs.hand_p - targetPos_abs;
+            handVel = mskOutputs.hand_v;
+            y = [handPos; handVel; mc.internalStates.X(5:6); Fpert];
+            
+            % reading from the internal model
+%             H = mc.ofc.systemEq.H;
+%             y = H*mc.internalStates.X;
+        end
     end
 end

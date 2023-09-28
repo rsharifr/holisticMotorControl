@@ -1,4 +1,4 @@
-classdef MusculoskeletalArm
+classdef MusculoskeletalArm < matlab.mixin.SetGet
     properties
         param
         X
@@ -14,6 +14,7 @@ classdef MusculoskeletalArm
             msk.param = getParametersPlanarArm();
             msk.param.armDamping = armDamping;
             msk.param.Nmuscle = 6;
+            msk.param.controlDependentNoise = 0.02;
 
             [IC,Y0,XDOT0] = msk.getIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
             msk.IC = IC;
@@ -64,18 +65,18 @@ classdef MusculoskeletalArm
             hand = elbow + [msk.param.a2.*cos(q_SH+q_EL); msk.param.a2.*sin(q_SH+q_EL)];
         end
         %% SOLVE MSK MODEL
-        function [msk,Xdot,X,Y] = solveModel_msk(msk)
-
-            X = msk.X;
+        function [xdot,x_new,y_new, msk] = solveModel(msk, dt)
+            x = msk.X;
             u = msk.U;
             F_hand = msk.Fhand;
-            armDamping = msk.mskParamSet.armDamping;
+            armDamping = msk.param.armDamping;
 
-            [Xdot,X,Y] =PlanarArm(0,X,[F_hand(2);F_hand(1);u],armDamping);
-            msk.X = X;
-            msk.XDOT = Xdot;
-            msk.Y = Y;
-
+            [xdot,~,y_new] =PlanarArm(0,x,[F_hand(2);F_hand(1);u],armDamping);
+            
+            x_new = x + xdot * dt;
+            msk.X = x_new;            
+            msk.XDOT = xdot;
+            msk.Y = y_new;
         end
 
         %% CALUCALTE TORQUE-EQUIVALENCE OF MUSCLE INPUTS
@@ -155,7 +156,25 @@ classdef MusculoskeletalArm
 
             a_tilde = 0*Jdot*qdot + J*qddot_tilde; % here Jdot*qdot isn't needed becuase the "nominal" condition do not have velocities
         end
+        %% CALCULATE MUSCLE ACTIVITIES FROM REF ACC
+        function [U, basis] = a2a(msk, Y, a_ref_mc, Fpert_est)
+            cdn = msk.param.controlDependentNoise;
+            mskOutputs = msk.getOutputs(Y);
+            q_SH = mskOutputs.q(1);
+            q_EL = mskOutputs.q(2);
+            qdot_SH = mskOutputs.qdot(1);
+            qdot_EL = mskOutputs.qdot(2);
 
+            syn = msk.interpolateSynergies(q_SH, q_EL);
+            basis = msk.calcBasis(syn, q_SH, q_EL);
+            a_ref_tilde = msk.CorrectAccRef(a_ref_mc,q_SH,q_EL,qdot_SH,qdot_EL,Fpert_est);
+            
+            coeff = lsqnonneg(basis,a_ref_tilde);
+            U = syn*coeff;
+            U = min(1,max(0,U));
+            U = U .* ( 1+cdn*randn(size(U)) );
+            msk.U = U;
+        end
 
     end
 

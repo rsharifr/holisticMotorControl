@@ -49,8 +49,8 @@ subplot(2,2,4);
 plot(1:nStep,hmn.msk.getOutputs(Y_msk).muscleF,'LineWidth',2)
  title('muscle force')
 
-X_ofc = results.ofc_Xdata;
-Xest_ofc = results.ofc_XEstdata;
+X_ofc = results.mc_Xdata;
+Xest_ofc = results.mc_XEstdata;
 targetPos_abs = hmn.generalParamSet.targetPos_abs;
 
 figure(300); clf
