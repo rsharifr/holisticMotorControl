@@ -99,5 +99,14 @@ classdef MotorController < matlab.mixin.SetGet
 %             H = mc.ofc.systemEq.H;
 %             y = H*mc.internalStates.X;
         end
+        %% REST TO INITIAL CONDITION
+        function resetStates(mc)
+            h = mc.ofc.simSetting.delay;
+            m = mc.ofc.systemEq.numberOfControls;
+            mc.internalStates.X = repmat(mc.param.xInit,h+1,1);
+            mc.internalStates.XEst = mc.internalStates.X;
+            mc.internalStates.U = zeros(m,1);
+            mc.internalStates.timeIndex = 1;
+        end
     end
 end

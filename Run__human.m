@@ -14,12 +14,15 @@ armDamping = [0;0];
 numberOfStationarySteps = 20;
 
 Fpert = [0;0];
-targetPos_rel = [0;-0.3]; % relative to initial hand position
+targetPos_rel = [0.3;0]; % relative to initial hand position
+withRobot = 1;
+
 
 hmn = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, ...
-            a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat');
+            a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat',withRobot);
 
-results = hmn.simulateHuman(1);
+
+results = hmn.simulateHuman(figure(100));
 
 %%
 Y_msk = results.msk_Ydata;

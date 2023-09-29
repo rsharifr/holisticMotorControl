@@ -1,4 +1,4 @@
-function [IC, y] = getPlanarArmAndRobotIC(qEL, qdotEL, qSH, qdotSH, a_IC, parameters)
+function [IC, y,xdot] = getPlanarArmAndRobotIC(qEL, qdotEL, qSH, qdotSH, a_IC, parameters)
 % * State variable(s):
 % *    x[ 0] = `Main.PlanarArmAndRobot.MuscleArm1.BiExtensor.activationDynamics1.a`(t)
 % *    x[ 1] = `Main.PlanarArmAndRobot.MuscleArm1.BiFlexor.activationDynamics1.a`(t)
@@ -23,4 +23,4 @@ IC(7) =  qEL; % elbow angle
 IC(8) = qdotEL;
 IC(9) =  qSH; % shoulder angle
 IC(10) = qdotSH;
-[~, IC, y] = PlanarArmAndRobot(0,IC,zeros(8,1),parameters);
+[xdot, IC, y] = PlanarArmAndRobot(0,IC,zeros(8,1),parameters);

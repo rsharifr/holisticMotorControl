@@ -1,4 +1,4 @@
-function [qddot, qddot_robot] = getPlanarArmAndRobotQddot(XDOT)
+function out = getPlanarArmAndRobotStates(X)
 % * State variable(s):
 % *    x[ 0] = `Main.PlanarArmAndRobot.MuscleArm1.BiExtensor.activationDynamics1.a`(t)
 % *    x[ 1] = `Main.PlanarArmAndRobot.MuscleArm1.BiFlexor.activationDynamics1.a`(t)
@@ -17,5 +17,8 @@ function [qddot, qddot_robot] = getPlanarArmAndRobotQddot(XDOT)
 % *    x[14] = `Main.PlanarArmAndRobot.robot.R2.flange_b_phiMB`(t)
 % *    x[15] = diff(`Main.PlanarArmAndRobot.robot.R2.flange_b_phiMB`(t),t)
 
-qddot = XDOT([10,8]);
-qddot_robot = XDOT([14,16]);
+out.q = X([9,7]);
+out.qdot = X([10,8]);
+out.a = X([1:6]);
+out.q_robot = X([13,15]);
+out.qdot_robot = X([14,16]);
