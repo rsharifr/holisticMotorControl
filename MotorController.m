@@ -1,4 +1,4 @@
-classdef MotorController < matlab.mixin.SetGet
+classdef MotorController < matlab.mixin.Copyable
 
     properties
         ofc
@@ -8,8 +8,9 @@ classdef MotorController < matlab.mixin.SetGet
 
     methods 
         %% CONSTRUCTOR
-        function mc = MotorController(dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
+        function mc = MotorController(dt,tEnd, numberOfStationarySteps, startPosition, Fpert, runTimeNoiseFactor)
             mc = setupOFC(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
+            mc.param.runTimeNoiseFactor = runTimeNoiseFactor;
         end
     %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % METHODS
@@ -41,19 +42,21 @@ classdef MotorController < matlab.mixin.SetGet
             sensoryNoise = mvnrnd(zeros(p,1),Omega_omega)';
             internalNoise = mvnrnd(zeros(n,1),Omega_eta)';
 
+
+            noiseFactor = mc.param.runTimeNoiseFactor;
             stateDependentNoise = 0;
             for isdn = 1:size(D,3)
                 stateDependentNoise = stateDependentNoise + randn*D(:,:,isdn)*mc.internalStates.X;
             end
-
-            yz = yz + sensoryNoise + stateDependentNoise;
+            
+            yz = yz + noiseFactor*(sensoryNoise + stateDependentNoise);
             
             i = mc.internalStates.timeIndex;
             A = mc.ofc.systemEq.A;
             B = mc.ofc.systemEq.B;
             H = mc.ofc.systemEq.H;
             K = mc.param.K;
-            XEst_new = A(:,:,i)*mc.internalStates.XEst + B*mc.internalStates.U + K(:,:,i)*(yz-H*mc.internalStates.XEst) + internalNoise;
+            XEst_new = A(:,:,i)*mc.internalStates.XEst + B*mc.internalStates.U + K(:,:,i)*(yz-H*mc.internalStates.XEst) + noiseFactor*internalNoise;
             mc.internalStates.XEst = XEst_new; 
 
         end
@@ -64,6 +67,8 @@ classdef MotorController < matlab.mixin.SetGet
             n = mc.ofc.systemEq.numberOfStates;
             Omega_xi = mc.ofc.noiseConstructors.additiveProcessNoiseCovar;
             
+            noiseFactor = mc.param.runTimeNoiseFactor;
+
             processNoise = mvnrnd(zeros(n,1),Omega_xi)';
             controlDependentNoise = 0;
             for icdn = 1:size(C,3)
@@ -74,7 +79,7 @@ classdef MotorController < matlab.mixin.SetGet
             B = mc.ofc.systemEq.B;
             i = mc.internalStates.timeIndex;
 
-            X_new = A_sim(:,:,i)*mc.internalStates.X + B*mc.internalStates.U + processNoise + controlDependentNoise;
+            X_new = A_sim(:,:,i)*mc.internalStates.X + B*mc.internalStates.U + noiseFactor*(processNoise + controlDependentNoise);
             mc.internalStates.X = X_new;
         end
         %% CALCULATE CONTROL
@@ -107,6 +112,21 @@ classdef MotorController < matlab.mixin.SetGet
             mc.internalStates.XEst = mc.internalStates.X;
             mc.internalStates.U = zeros(m,1);
             mc.internalStates.timeIndex = 1;
+        end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % END OF METHODS
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    
+    %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % METHODS - PROTECTED
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+    
+    methods (Access = protected)
+        function obj_cp = copyElement(obj)
+            obj_cp = copyElement@matlab.mixin.Copyable(obj);
+            obj_cp.ofc = copy(obj.ofc); %Deep copy of object
         end
     end
 end

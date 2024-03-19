@@ -1,10 +1,9 @@
- classdef Human < matlab.mixin.Copyable
+ classdef Human_COM < matlab.mixin.Copyable  
 
     properties
         generalParamSet
         mc
         msk
-        rc
         results
     end
 
@@ -14,7 +13,7 @@
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         
         %% CONSTRUCTOR        
-        function hmn = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert, pathToSynergyData, withRobot, runTimeNoiseFactor, controlOrientedModel)
+        function hmn = Human_COM(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert, pathToSynergyData, withRobot, runTimeNoiseFactor)
             hmn.generalParamSet.dt = dt;
             hmn.generalParamSet.tEnd = tEnd;
             hmn.generalParamSet.nStep = round(tEnd/dt) + numberOfStationarySteps;
@@ -28,8 +27,6 @@
 
             hmn.generalParamSet.initialHandPos = hmn.msk.getHandPosition(thetaSH_0,thetaEL_0);
             hmn.generalParamSet.targetPos_abs = targetPos_rel + hmn.generalParamSet.initialHandPos;
-
-            hmn.rc = RobotController(controlOrientedModel);
 
             hmn.initiateResultsStruct();
         end
@@ -52,10 +49,10 @@
             hmn.results.msk_currentY = Y;
             hmn.results.msk_Ydata = nan(nStep, length(Y));
             hmn.results.msk_Ydata(1,:) = Y(:,1)';
-
+            
             hmn.results.msk_synergyData = nan(nStep, hmn.msk.param.NoSyn);
             hmn.results.msk_F_interData = nan(nStep,2);
-            
+
             hmn.results.msk_currentU = zeros(Nmuscle,1);
             hmn.results.msk_Udata = nan(nStep-1, Nmuscle);
 
@@ -77,14 +74,10 @@
             hmn.results.mc_Udata = zeros(nStep-1,m);
 
             hmn.results.mc_t = (0:nStep-1)*dt;
-
-            hmn.results.rc_Udata = zeros(nStep,2);
-            hmn.results.rc_com_XEstData = zeros(nStep,n);
-
         end
 
-        %% SIMULATE HUMAN MODEL
-        function results = simulateHuman(hmn, figureHandle)
+        %% SIMULATE HUMAN MODEL FROM A GIVEN INITIAL TIME/CONDITION
+        function results = predictHumanMotion(hmn, simulationRange, initialStates, tauData, figureHandle)
             plotResults = false;
             if exist('figureHandle','var') 
                 if ishandle(figureHandle)
@@ -95,10 +88,12 @@
                     ha = axes;
                     hold(ha,"on");
                     ha.DataAspectRatio = [1,1,1];
+                    ha.XLim = [-0.2 0.5];
+                    ha.YLim = [0 1];
                     cmap_arm = copper(hmn.generalParamSet.nStep);
                     cmap_rob = winter(hmn.generalParamSet.nStep);
                 else
-                    warning("A figure handle was expected. Skipping plotting hand path")
+%                     warning("A figure handle was expected. Skipping plotting hand path")
                 end
             end
                
@@ -107,9 +102,16 @@
 
             Fpert = hmn.generalParamSet.Fpert;
             
-            fprintf("Simulation started... "); 
-            tic
-            for i = 1:hmn.generalParamSet.nStep-1
+            hmn.mc.internalStates.timeIndex = simulationRange(1);
+            hmn.mc.internalStates.X = initialStates.mc.X;
+            hmn.mc.internalStates.XEst = initialStates.mc.XEst;
+            robotStates = struct('q1',initialStates.msk.q_robot(1),'qdot1',initialStates.msk.qdot_robot(1),'q2',initialStates.msk.q_robot(2),'qdot2',initialStates.msk.qdot_robot(2),'handRobotAngle',initialStates.msk.handRobotAngle,'handRobotAngle_diff',initialStates.msk.handRobotAngle_diff);
+            hmn.msk.resetStates(initialStates.msk.q(2),initialStates.msk.qdot(2),initialStates.msk.q(1),initialStates.msk.qdot(1),initialStates.msk.a,robotStates);
+
+            hmn.results.mc_Xdata(simulationRange(1),:) = initialStates.mc.X';
+            hmn.results.mc_XEstdata(simulationRange(1),:) = initialStates.mc.XEst';
+
+            for i = simulationRange(1):simulationRange(2)
                 %%%%%% OFC's integral step
                 U_mc = hmn.mc.getControlCommand();
 
@@ -129,45 +131,19 @@
                 hmn.results.msk_Udata(i,:) = hmn.msk.U';
                 hmn.results.msk_Ydata(i,:) = hmn.msk.Y';
                 hmn.results.msk_Xdata(i,:) = hmn.msk.X';
+                
 
                 Fpert_est = hmn.mc.internalStates.XEst(7:8);
                 [~,~,coeff] = hmn.msk.acceleration2activation(hmn.results.msk_currentY, a_ref_mc, Fpert_est);
                 
+                % THIS IS THE PERTURBATION
+                if i>80
+                    hmn.msk.environment.Fhand = [0;5];
+                end
 
-% % % % % % % %                 THIS IS OPTIMAL MOTOR TORQUE
-%                 j = mod(i-1,1);
-%                 if j==0
-%                     [tau,com_cp] = hmn.rc.solveRobotTorque_optimal(i, hmn.getCurrentStates());
-%                 end
-%                 hmn.msk.environment.robotTorque = tau(:,j+1);
-                
-% % % % % % % % %                 THIS IS THE PERTURBATION
-%                 if i>80
-%                     hmn.msk.environment.Fhand = [0;5];
-%                 end
-                
-
-%%%%%%%%%%%%%%%%%           THIS IS TRAJECTORY FOLLOWING
-%                 if ~exist('trajectory','var'), load("normalTrajectory.mat"); end
-%                 try 
-%                     sp_p = trajectory.hand_p(i+1,:)';
-%                     sp_v = trajectory.hand_v(i+1,:)';
-%                 catch
-%                     sp_v = [0;0];
-%                 end
-%                 tau = hmn.rc.solveRobotTorque_imedanceControl(sp_p,sp_v,hmn.msk);
-%                 if i>hmn.generalParamSet.nStep-20, tau = [0;0]; end
-%                 hmn.msk.environment.robotTorque = tau;
-                
-
-%%%%%%%%%%%%%%                 THIS IS HAPTIC EFFECT
-%                 tau = hmn.rc.solveRobotTorque_hapticForce([0;0], hmn.msk);
-%                 hmn.msk.environment.robotTorque = tau;
-
+                hmn.msk.environment.robotTorque = tauData(:,i);
                 F_inter = hmn.msk.getInteractionForce();
-
                 hmn.msk.solveModel(dt);
-                
                 
                 hmn.results.msk_currentU = hmn.msk.U;
                 hmn.results.msk_currentX = hmn.msk.X;
@@ -175,19 +151,11 @@
                 hmn.results.msk_currentY = hmn.msk.Y;
                 hmn.results.msk_synergyData(i,:) = coeff';
                 hmn.results.msk_F_interData(i,:) = F_inter';
-                hmn.results.rc_Udata(i,:) = hmn.msk.environment.robotTorque';
-%                 hmn.results.rc_com_XEstData(i,:) = com_cp.results.mc_XEstdata(i,:);
 
-                %%%%%%% Estimator's integration step                
-                
-                if i<hmn.mc.ofc.simSetting.delay
-                    mskOutputs_delayed = hmn.msk.getOutputs(hmn.results.msk_Ydata(1,:)');
-                else
-                    mskOutputs_delayed = hmn.msk.getOutputs(hmn.results.msk_Ydata(i - hmn.mc.ofc.simSetting.delay+1,:)');
-                end
+                %%%%%%% Estimator's integration step
                 mskOutputs = hmn.msk.getOutputs(hmn.results.msk_currentY);
-
-                sensoryFeedback = hmn.mc.updateFeedback(mskOutputs_delayed, hmn.generalParamSet.targetPos_abs, Fpert);
+                
+                sensoryFeedback = hmn.mc.updateFeedback(mskOutputs, hmn.generalParamSet.targetPos_abs, Fpert);
                 XEst_mc_new = hmn.mc.updateEstimator(sensoryFeedback);
 
                 hmn.results.mc_XEstdata(i+1,:) = XEst_mc_new';
@@ -196,7 +164,7 @@
                 hmn.mc.incrementInternalTime();
 
                 %%%%%%% plot this arm path
-                if plotResults && mod(i,10)==1
+                if plotResults && mod(i,2)==0
                     q_SH = mskOutputs.q(1);
                     q_EL = mskOutputs.q(2);
                     [hnd, elb] = hmn.msk.getHandPosition(q_SH,q_EL);
@@ -214,23 +182,17 @@
 
                         plot(ha,[ee(1),middleJoint(1),base(1)], [ee(2),middleJoint(2),base(2)],'-o','LineWidth',2,'Color',cmap_rob(i,:));
                     end
-                    drawnow
+                    
                 end
 
             end
-            fprintf("Simulation done! Elapsed time %d min %0.3f sec\n", floor(toc/60), mod(toc,60)); 
-            
+            drawnow
+            results = hmn.results;
 
-            hmn.results.mc_Xdata = hmn.results.mc_Xdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
-            hmn.results.mc_XEstdata = hmn.results.mc_XEstdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
-            hmn.results.rc_com_XEstData = hmn.results.rc_com_XEstData(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
-            results = hmn.results; 
+%             hmn.results.mc_Xdata = hmn.results.mc_Xdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
+%             hmn.results.mc_XEstdata = hmn.results.mc_XEstdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
+
         end
-        %% GET FULL STATE OF THE HUMAN MODEL
-        function currentStates = getCurrentStates(hmn)
-            currentStates.msk = hmn.msk.getStates();
-            currentStates.mc = hmn.mc.internalStates;
-        end            
         %% REST STATES
         function resetStates(hmn,thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0)
             % TODO: there is a bug here. if initial angles change, the

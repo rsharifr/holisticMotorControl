@@ -1,4 +1,4 @@
-function [IC, y,xdot] = getPlanarArmAndRobotIC(qEL, qdotEL, qSH, qdotSH, a_IC, parameters)
+function [IC, y,xdot] = getPlanarArmAndRobotIC(qEL, qdotEL, qSH, qdotSH, a_IC, parameters, robotStates)
 % * State variable(s):
 % *    x[ 0] = `Main.PlanarArmAndRobot.MuscleArm1.BiExtensor.activationDynamics1.a`(t)
 % *    x[ 1] = `Main.PlanarArmAndRobot.MuscleArm1.BiFlexor.activationDynamics1.a`(t)
@@ -17,10 +17,19 @@ function [IC, y,xdot] = getPlanarArmAndRobotIC(qEL, qdotEL, qSH, qdotSH, a_IC, p
 % *    x[14] = `Main.PlanarArmAndRobot.robot.R2.flange_b_phiMB`(t)
 % *    x[15] = diff(`Main.PlanarArmAndRobot.robot.R2.flange_b_phiMB`(t),t)
 
-IC = zeros(16,1);
-IC(1:6) = a_IC;
-IC(7) =  qEL; % elbow angle
-IC(8) = qdotEL;
-IC(9) =  qSH; % shoulder angle
-IC(10) = qdotSH;
-[xdot, IC, y] = PlanarArmAndRobot(0,IC,zeros(8,1),parameters);
+IC_guess = zeros(16,1);
+IC_guess(1:6) = a_IC;
+IC_guess(7) =  qEL; % elbow angle
+IC_guess(8) = qdotEL;
+IC_guess(9) =  qSH; % shoulder angle
+IC_guess(10) = qdotSH;
+if exist('robotStates','var')
+    IC_guess(11) = robotStates.handRobotAngle;
+    IC_guess(12) = robotStates.handRobotAngle_diff;
+    IC_guess(13) = robotStates.q1;
+    IC_guess(14) = robotStates.qdot1;
+    IC_guess(15) = robotStates.q2;
+    IC_guess(16) = robotStates.qdot2;
+end
+[xdot, IC, y] = PlanarArmAndRobot(0,IC_guess,zeros(8,1),parameters);
+end

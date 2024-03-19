@@ -1,4 +1,4 @@
-classdef OFC < handle
+classdef OFC < matlab.mixin.Copyable
     properties
         simSetting
         costFunction

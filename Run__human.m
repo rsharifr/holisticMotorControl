@@ -4,67 +4,224 @@ clearvars
 dt = 5e-3; % in seconds
 tEnd = 1.; % in seconds
 
-thetaSH_0 = 1.2;
+thetaSH_0 = .2;
 omegaSH_0 = 0;
-thetaEL_0 = 1.2;
+thetaEL_0 = 1.5;
 omegaEL_0 = 0;
 a_0 = zeros(6,1);
 
 armDamping = [0;0];
-numberOfStationarySteps = 20;
+numberOfStationarySteps = 21;
 
 Fpert = [0;0];
-targetPos_rel = [0.3;0]; % relative to initial hand position
+targetPos_rel = [-0.25;0]; % relative to initial hand position
+
+%% the control-oriented model for the robot MPC
+withRobot_com = 1;
+runTimeNoiseFactor_com = 0;
+hmn_com = Human_COM(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, ...
+            a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat',withRobot_com, runTimeNoiseFactor_com);
+
+%% Actual human-robot model
 withRobot = 1;
-
-
+runTimeNoiseFactor = 0;
 hmn = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, ...
-            a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat',withRobot);
+            a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat',withRobot, runTimeNoiseFactor, hmn_com);
 
 
-results = hmn.simulateHuman(figure(100));
+results = hmn.simulateHuman();
+
+save("human-"+string(datetime('now'),'yyyy-MM-d HH-mm-ss')+".mat",'hmn')
+
+
 
 %%
 Y_msk = results.msk_Ydata;
 U_msk = results.msk_Udata;
+X_msk = results.msk_Xdata;
 
 nStep = hmn.generalParamSet.nStep;
+dt = hmn.generalParamSet.dt;
 
 figure(200); clf
-subplot(2,2,1)
-plot(1:nStep,hmn.msk.getOutputs(Y_msk).q,'LineWidth',2)
-title('joint angles')
-legend('elbow','shoulder')
+ha200 = tightSubplot(3,3,0.1,0.1,0.1,0.1,0.1,0.1);
+hold(ha200, "on")
+box(ha200,"on")
+% xlim(ha200,[0 1])
+plot(ha200(1,1),(1:nStep)*dt,180/pi*hmn.msk.getOutputs(Y_msk).q,'LineWidth',2)
+% plot(ha200(1,1),(1:nStep)*dt,180/pi*hmn.msk.getOutputs(Y_msk).qdot,'LineWidth',2)
+title(ha200(1,1),'Joint angles (deg)')
+xlabel(ha200(1,1),'Time (s)')
+legend(ha200(1,1),'Elbow','Shoulder','Location','best','color','white','box','on')
 
-subplot(2,2,2); 
-plot(1:nStep,hmn.msk.getOutputs(Y_msk).hand_p,'LineWidth',2)
-hold all
-plot(1:nStep,hmn.msk.getOutputs(Y_msk).hand_v,'LineWidth',2)
-title("task space")
-legend('x','y','v_x','v_y','Location','best')
 
-subplot(2,2,3); 
-plot(1:nStep-1,U_msk,'LineWidth',2)
-title('muscle activations')
-legend('ext bi','flx bi','ext elb','flx elb','ext shd','flx shd','NumColumns',3,'location','best')
+plot(ha200(1,2),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_p,'LineWidth',2)
+plot(ha200(1,2),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_v,'LineWidth',2)
+title(ha200(1,2),"Physical task space")
+xlabel(ha200(1,2),'Time (s)')
+legend(ha200(1,2),'Pos_x','Pos_y','Vel_x','Vel_y','Location','best','NumColumns',2,'color','white','box','on')
 
-subplot(2,2,4);
-plot(1:nStep,hmn.msk.getOutputs(Y_msk).muscleF,'LineWidth',2)
- title('muscle force')
+
+plot(ha200(2,1),(1:nStep-1)*dt,U_msk,'LineWidth',2)
+xlabel(ha200(2,1),'Time (s)')
+title(ha200(2,1),'Muscle activations')
+legend(ha200(2,1),'TRI bi','BIC','Tri uni','BRD','DLT pst','DLT ant','NumColumns',2,'Location','best','color','white','box','on')
+
+
+plot(ha200(2,2),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).muscleF,'LineWidth',2)
+xlabel(ha200(2,2),'Time (s)')
+title(ha200(2,2),'Muscle forces (N)')
+legend(ha200(2,2),'TRI bi','BIC','Tri uni','BRD','DLT pst','DLT ant','NumColumns',2,'Location','best','color','white','box','on')
+
+
+plot(ha200(3,1),(1:nStep)*dt,results.msk_synergyData,'LineWidth',2)
+xlabel(ha200(3,1),'Time (s)')
+title(ha200(3,1),'Synerg activations')
+legend(ha200(3,1),'Syn 1','Syn 2','Syn 3','Syn 4','NumColumns',2,'Location','best','color','white','box','on')
+
 
 X_ofc = results.mc_Xdata;
 Xest_ofc = results.mc_XEstdata;
 targetPos_abs = hmn.generalParamSet.targetPos_abs;
 
-figure(300); clf
-subplot(2,1,1); hold all
-plot(X_ofc(:,1:2)+targetPos_abs','LineWidth',2)
-plot(X_ofc(:,3:4),'LineWidth',2)
-plot(Xest_ofc(:,1:2)+targetPos_abs','--')
-plot(Xest_ofc(:,3:4),'--')
-title("task space")
 
-subplot(2,1,2); hold all
-plot(X_ofc(:,5:6),'LineWidth',2)
-plot(Xest_ofc(:,5:6),'--')
-title("OFC muscle activation")
+
+% plot(ha200(1,3),(1:nStep)*dt, X_ofc(:,1:2)+targetPos_abs','-','LineWidth',2)
+% plot(ha200(1,3),(1:nStep)*dt, X_ofc(:,3:4),'-','LineWidth',2)
+plot(ha200(1,3),(1:nStep)*dt, Xest_ofc(:,1:2)+targetPos_abs','LineWidth',2)
+plot(ha200(1,3),(1:nStep)*dt, Xest_ofc(:,3:4),'-','LineWidth',2)
+% plot(ha200(1,3),(1:nStep)*dt, hmn.msk.getOutputs(Y_msk).hand_p)
+% plot(ha200(1,3),(1:nStep)*dt, hmn.msk.getOutputs(Y_msk).hand_v)
+xlabel(ha200(1,3),'Time (s)')
+legend(ha200(1,3),'Pos_x','Pos_y','Vel_x','Vel_y','Location','best','NumColumns',2,'color','white','box','on')
+title(ha200(1,3),"High-level 'abstract' task space")
+
+
+% plot(ha300(2,3),(1:nStep)*dt, X_ofc(:,5:6),'--')
+plot(ha200(2,3),(1:nStep)*dt, Xest_ofc(:,5:6),'LineWidth',2)
+xlabel(ha200(2,3),'Time (s)')
+title(ha200(2,3),"High-level muscle activation")
+legend(ha200(2,3),'Muscle x','Muscle y','Location','best','color','white','box','on')
+
+
+plot(ha200(3,2),(1:nStep)*dt,[Xest_ofc(:,7:8),results.rc_com_XEstData(:,7:8)])
+
+plot(ha200(3,3),(1:nStep)*dt, results.msk_F_interData)
+
+
+figure(400)
+plot((1:nStep)*dt,results.rc_Udata)
+title('robot torques')
+xlim([0,tEnd])
+
+
+
+return
+
+%% IROS figure
+fileName = 'humanAlone';
+% fileName = 'humanWithRobotOff';
+% fileName = 'humanWithRobotOn';
+% fileName = 'humanWithRobotOnPertOnUnexpected';
+% fileName = 'humanWithRobotOnPertOnExpected';
+% fileName = 'humanWithRobotImpedance';
+load([fileName '.mat']);
+results = hmn.results;
+
+Y_msk = results.msk_Ydata;
+U_msk = results.msk_Udata;
+X_msk = results.msk_Xdata;
+
+nStep = hmn.generalParamSet.nStep;
+dt = hmn.generalParamSet.dt;
+
+X_ofc = results.mc_Xdata;
+Xest_ofc = results.mc_XEstdata;
+targetPos_abs = hmn.generalParamSet.targetPos_abs;
+
+
+hf300 = figure(300); clf
+ha300 = tightSubplot(7,1,0.05,0.02,0.12,0.05,0.1,0.05);
+hold(ha300, "on")
+box(ha300,"on")
+xlim(ha300,[0 1])
+
+
+
+
+% plot(hf300(1,1),(1:nStep)*dt, X_ofc(:,1:2)+targetPos_abs','-','LineWidth',2)
+% plot(hf300(1,1),(1:nStep)*dt, X_ofc(:,3:4),'-','LineWidth',2)
+plot(ha300(1,1),(1:nStep)*dt, Xest_ofc(:,1:2)+targetPos_abs','LineWidth',2)
+plot(ha300(1,1),(1:nStep)*dt, Xest_ofc(:,3:4),'-','LineWidth',2)
+% plot(hf300(1,1),(1:nStep)*dt, hmn.msk.getOutputs(Y_msk).hand_p)
+% plot(hf300(1,1),(1:nStep)*dt, hmn.msk.getOutputs(Y_msk).hand_v)
+legend(ha300(1,1),'Pos_x','Pos_y','Vel_x','Vel_y','Location','best','NumColumns',2,'color','none','box','off')
+title(ha300(1,1),"'Abstract' task space")
+ylim(ha300(1,1),[-0.5 0.5])
+
+
+
+% plot(ha300(2,1),(1:nStep)*dt, X_ofc(:,5:6),'--')
+plot(ha300(2,1),(1:nStep)*dt, Xest_ofc(:,5:6),'LineWidth',2)
+title(ha300(2,1),"'Abstract' neural excitation")
+legend(ha300(2,1),'Muscle x','Muscle y','Location','best','color','none','box','off')
+ylim(ha300(2,1),[-5 15]*1e-3)
+
+
+plot(ha300(3,1),(1:nStep)*dt,results.msk_synergyData,'LineWidth',2)
+title(ha300(3,1),'Synerg activations')
+legend(ha300(3,1),'Syn 1','Syn 2','Syn 3','Syn 4','NumColumns',2,'Location','best','color','none','box','off')
+ylim(ha300(3,1),[0 0.3])
+
+
+
+plot(ha300(4,1),(1:nStep-1)*dt,U_msk,'LineWidth',2)
+title(ha300(4,1),'Neural excitations')
+legend(ha300(4,1),'TRI bi','BIC','Tri uni','BRD','DLT pst','DLT ant','NumColumns',2,'Location','best','color','none','box','off')
+ylim(ha300(4,1),[0 0.1])
+
+
+plot(ha300(5,1),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).muscleF,'LineWidth',2)
+title(ha300(5,1),'Muscle forces (N)')
+legend(ha300(5,1),'TRI bi','BIC','Tri uni','BRD','DLT pst','DLT ant','NumColumns',2,'Location','best','color','none','box','off')
+ylim(ha300(5,1),[0 100])
+
+
+
+plot(ha300(6,1),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_p,'LineWidth',2)
+plot(ha300(6,1),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_v,'LineWidth',2)
+title(ha300(6,1),"Physical task space")
+legend(ha300(6,1),'Pos_x','Pos_y','Vel_x','Vel_y','Location','best','NumColumns',2,'color','none','box','off')
+ylim(ha300(6,1),[-0.5 0.5])
+
+
+if contains(fileName,'WithRobot')
+    plot(ha300(7,1),(1:nStep)*dt,results.rc_Udata,'LineWidth',2)
+    title(ha300(7,1),"Robot torques")
+    legend(ha300(7,1),'T_1','T_2','Location','best','NumColumns',2,'color','none','box','off')
+    xlabel(ha300(7,1),'Time (s)')
+    ylim(ha300(7,1),[-4,2])
+else
+    xlabel(ha300(6,1),'Time (s)')
+    delete(ha300(7,1))
+    ha300 = ha300(1:end-1);
+end
+
+if ~ (strcmpi(fileName,'humanAlone'))
+    [ha300.YTickLabel] = deal([]);
+end
+if strcmpi(fileName,'humanWithRobotOff')
+     ha300(end,1).YTickLabelMode ="auto";
+end
+
+[ha300(1:end-1,:).XTickLabel] = deal([]);
+
+fontsize = 7;
+setFontSize(hf300,fontsize)
+
+saveFig(1.55,7,'plots',fileName,'pdf',hf300,false)
+
+% plot(hf300(3,2),(1:nStep)*dt,[Xest_ofc(:,7:8),results.rc_com_XEstData(:,7:8)])
+% 
+% plot(hf300(3,3),(1:nStep)*dt, results.msk_F_interData)
+

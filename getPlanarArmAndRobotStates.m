@@ -17,8 +17,21 @@ function out = getPlanarArmAndRobotStates(X)
 % *    x[14] = `Main.PlanarArmAndRobot.robot.R2.flange_b_phiMB`(t)
 % *    x[15] = diff(`Main.PlanarArmAndRobot.robot.R2.flange_b_phiMB`(t),t)
 
-out.q = X([9,7]);
-out.qdot = X([10,8]);
-out.a = X([1:6]);
-out.q_robot = X([13,15]);
-out.qdot_robot = X([14,16]);
+
+if iscolumn(X)
+    out.q = X([9,7]);
+    out.qdot = X([10,8]);
+    out.a = X(1:6);
+    out.q_robot = X([13,15]);
+    out.qdot_robot = X([14,16]);
+    out.handRobotAngle = X(11);
+    out.handRobotAngle_diff = X(12);
+else
+    out.q = X(:,[9,7]);
+    out.qdot = X(:,[10,8]);
+    out.a = X(:,1:6);
+    out.q_robot = X(:,[13,15]);
+    out.qdot_robot = X(:,[14,16]);
+    out.handRobotAngle = X(:,11);
+    out.handRobotAngle_diff = X(:,12);
+end

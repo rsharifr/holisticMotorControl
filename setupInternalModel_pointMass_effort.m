@@ -35,10 +35,10 @@ H = eye(size(A,2));
 
 
 % this is impulse/step perturbation 
-A(3,7,1:end) = 1/mx;
-A(4,8,1:end) = 1/my;
-A_sim(3,7,1:end) = 1/mx;
-A_sim(4,8,1:end) = 1/my;
+A(3,7,:) = 1/mx;
+A(4,8,:) = 1/my;
+A_sim(3,7,:) = 1/mx;
+A_sim(4,8,:) = 1/my;
 
 % this is the force field
 % l = 0; % force field term
@@ -64,14 +64,14 @@ eta = 1e-9; % internal noise factor
 
 
 %% %%%%%%%%% Initial condition and penalties %%%%%%%%%%%
-statePenaltyCoefficients = [1e5 , 1e5 , 1e4, 1e4,  0,  0,  0,  0];
+statePenaltyCoefficients = [1e0 , 1e0 , 1e0, 1e0,  0,  0,  0,  0];
 statePenaltyCoefficients = statePenaltyCoefficients(1:n);
 Q = zeros(n,n,nStep);
 Q(:,:,1+end-numberOfStationarySteps:end) = repmat(diag(statePenaltyCoefficients),1,1,numberOfStationarySteps);
 
-controlPenaltyCoefficients = 100*[1,1];
+controlPenaltyCoefficients = [1,1];
 R = repmat(diag(controlPenaltyCoefficients),1,1,nStep-1);
-xInit = [startPosition; 0; 0; -0*f_pert; f_pert]; 
+xInit = [startPosition; 0; 0; 0; 0; f_pert]; 
 
 %%
 

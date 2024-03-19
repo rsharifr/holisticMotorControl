@@ -11,6 +11,12 @@ function out = getPlanarArmStates(X)
 % *    x[ 8] = `Main.PlanarArm.MuscleArm1.zShoulder.theta`(t)
 % *    x[ 9] = diff(`Main.PlanarArm.MuscleArm1.zShoulder.theta`(t),t)
 
-out.q = X([9,7]);
-out.qdot = X([10,8]);
-out.a = X([1:6]);
+if iscolumn(X)
+    out.q = X([9,7]);
+    out.qdot = X([10,8]);
+    out.a = X(1:6);
+else
+    out.q = X(:,[9,7]);
+    out.qdot = X(:,[10,8]);
+    out.a = X(:,1:6);
+end

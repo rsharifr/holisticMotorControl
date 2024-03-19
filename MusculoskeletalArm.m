@@ -1,4 +1,4 @@
-classdef MusculoskeletalArm < matlab.mixin.SetGet
+classdef MusculoskeletalArm < matlab.mixin.Copyable
     properties
         param
         X
@@ -10,11 +10,11 @@ classdef MusculoskeletalArm < matlab.mixin.SetGet
     end
 
     methods
-        function msk = MusculoskeletalArm(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergy, Fhand0, withRobot)
+        function msk = MusculoskeletalArm(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, armDamping, pathToSynergy, Fhand0, withRobot, runTimeNoiseFactor)
             msk.param = getParametersPlanarArm();
             msk.param.armDamping = armDamping;
             msk.param.Nmuscle = 6;
-            msk.param.controlDependentNoise = 0.01;
+            msk.param.controlDependentNoise = runTimeNoiseFactor*0.01;
             msk.param.withRobot = withRobot;
 
             [IC,Y0,XDOT0] = msk.getIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
@@ -30,11 +30,15 @@ classdef MusculoskeletalArm < matlab.mixin.SetGet
         end
 
         %% SOLVE INITIAL CONDITION
-        function [IC,Y,XDOT] = getIC(msk, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0)
+        function [IC,Y,XDOT] = getIC(msk, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, robotStates)
             if ~msk.param.withRobot
                 [IC,Y,XDOT] = getPlanarArmIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, msk.param.armDamping);
             else
-                [IC,Y,XDOT] = getPlanarArmAndRobotIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, msk.param.armDamping);
+                if exist('robotStates','var')
+                    [IC,Y,XDOT] = getPlanarArmAndRobotIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, msk.param.armDamping, robotStates);
+                else
+                    [IC,Y,XDOT] = getPlanarArmAndRobotIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, msk.param.armDamping);
+                end
             end
         end
 
@@ -84,12 +88,14 @@ classdef MusculoskeletalArm < matlab.mixin.SetGet
             hand = elbow + [msk.param.a2.*cos(q_SH+q_EL); msk.param.a2.*sin(q_SH+q_EL)];
         end
         %% CALCULATE ROBOT JOINT POSITIONS
-        function [hand, elbow] = getRobotPosition(msk, q_SH,q_EL)
-            shoulder = [0;0];
-            elbow = shoulder + [msk.param.a1.*cos(q_SH); msk.param.a1.*sin(q_SH)];
-            hand = elbow + [msk.param.a2.*cos(q_SH+q_EL); msk.param.a2.*sin(q_SH+q_EL)];
-        end
+%         function [hand, elbow] = getRobotPosition(msk, q_SH,q_EL)
+%             shoulder = [0;0];
+%             elbow = shoulder + [msk.param.a1.*cos(q_SH); msk.param.a1.*sin(q_SH)];
+%             hand = elbow + [msk.param.a2.*cos(q_SH+q_EL); msk.param.a2.*sin(q_SH+q_EL)];
+%         end
         %% SOLVE MSK MODEL
+        % TODO FIX: there is a mismatch between the y and x. x is one step
+        % ahead of y. 
         function [xdot,x_new,y_new, msk] = solveModel(msk, dt)
             x = msk.X;
             u = msk.U;
@@ -185,7 +191,7 @@ classdef MusculoskeletalArm < matlab.mixin.SetGet
             a_tilde = 0*Jdot*qdot + J*qddot_tilde; % here Jdot*qdot isn't needed becuase the "nominal" condition do not have velocities
         end
         %% CALCULATE MUSCLE ACTIVITIES FROM REF ACC
-        function [U, basis] = acceleration2activation(msk, Y, a_ref_mc, Fpert)
+        function [U, basis, coeff] = acceleration2activation(msk, Y, a_ref_mc, Fpert)
             cdn = msk.param.controlDependentNoise;
             mskOutputs = msk.getOutputs(Y);
             q_SH = mskOutputs.q(1);
@@ -203,9 +209,31 @@ classdef MusculoskeletalArm < matlab.mixin.SetGet
             U = U .* ( 1+cdn*randn(size(U)) );
             msk.U = U;
         end
+        %% CALCULATE INTERACTION FORCE
+        function F_int = getInteractionForce(msk)
+            if msk.param.withRobot
+                states = msk.getStates();
+                q_r = states.q_robot;
+                qdot_r = states.qdot_robot;
+                [~,qddot_r] = msk.getqddot();
+
+                robotParam = getParametersRobot();
+                M = sysEQ_massMatrix(q_r,robotParam);
+                C = sysEQ_CMatrix([q_r;qdot_r],robotParam);
+                J = sysEQ_J(q_r,robotParam);
+                tau = msk.environment.robotTorque;
+                F_int = (J')\(M*qddot_r + C*qdot_r - tau);
+            else
+                F_int = [0;0];
+            end
+        end
         %% RESET TO INITIAL CONDITION
-        function resetStates(msk, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0)
-            [msk.IC,msk.Y,msk.XDOT] = msk.getIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
+        function resetStates(msk, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, robotStates)
+            if exist('robotStates','var')
+                [msk.IC,msk.Y,msk.XDOT] = msk.getIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0, robotStates);
+            else
+                [msk.IC,msk.Y,msk.XDOT] = msk.getIC(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, a_0);
+            end
             msk.X = msk.IC;
             msk.U = zeros(msk.param.Nmuscle,1);
         end
