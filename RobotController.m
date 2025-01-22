@@ -41,11 +41,16 @@ classdef RobotController < matlab.mixin.Copyable
             
             muscleU = com_cp.results.msk_Udata(simulationRange(1):simulationRange(2),:);
             muscleUCost = sum(muscleU.^2,'all')/N;
+
+            muscleF = com_cp.msk.getOutputs(com_cp.results.msk_Ydata).muscleF;
+            muscleF = muscleF(simulationRange(1):simulationRange(2),:);
+            muscleF(isnan(muscleF)) = 1000;
+            muscleFCost = sum(muscleF.^2,'all')/N;
             
             F_inter = com_cp.results.msk_F_interData(simulationRange(1):simulationRange(2),:);
             interForceCost = sum(F_inter.^2,'all')/N;
 
-            obj = 1e4*muscleUCost + 0*muscleForceCost + 0*interForceCost;
+            obj = 1e4*muscleUCost + 1e-1*muscleFCost + 0*muscleForceCost + 0*interForceCost;
             if isnan(obj) || isinf(obj)
                 obj = 100;
             end

@@ -56,15 +56,15 @@ A_sim(4,8,:) = 1/my;
 
 %% %%%%%%%% Setup up noise levels %%%%%%%%%%%%%
 sensoryDelay = 0.05; % in seconds
-c = 0.2; % multiplicative noise factor for control-dependent noise
+c = 0.2; % 0.2 multiplicative noise factor for control-dependent noise
 d = 0; % multiplicative noise factor for state-dependent noise 
-xi = 2e-7; % process noise factor
-omega = 1e-6; % sensory noise factor
+xi = 1e-8; %2e-7 process noise factor
+omega = 1e-6; % 1e-6 sensory noise factor
 eta = 1e-9; % internal noise factor
 
 
 %% %%%%%%%%% Initial condition and penalties %%%%%%%%%%%
-statePenaltyCoefficients = [1e0 , 1e0 , 1e0, 1e0,  0,  0,  0,  0];
+statePenaltyCoefficients = [1 , 1 , 1 , 1,  0 , 0 , 0 , 0];
 statePenaltyCoefficients = statePenaltyCoefficients(1:n);
 Q = zeros(n,n,nStep);
 Q(:,:,1+end-numberOfStationarySteps:end) = repmat(diag(statePenaltyCoefficients),1,1,numberOfStationarySteps);
@@ -95,3 +95,4 @@ modelParam.mh = mh;
 modelParam.mo = mo;
 modelParam.tau = tau;
 modelParam.kd = kd;
+modelParam.f_max = f_max;

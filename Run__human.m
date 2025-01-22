@@ -1,12 +1,13 @@
 clc
-clearvars
+% clearvars
+addpath("MATLAB_handy_functions\")
 %% basic parameters and initial conditions
 dt = 5e-3; % in seconds
 tEnd = 1.; % in seconds
 
-thetaSH_0 = .2;
+thetaSH_0 = 0.5; % 0.2 human-aware control. 0.5 for center out
 omegaSH_0 = 0;
-thetaEL_0 = 1.5;
+thetaEL_0 = 1.9; % 1.5 human-aware control. 1.9 for center out
 omegaEL_0 = 0;
 a_0 = zeros(6,1);
 
@@ -14,7 +15,9 @@ armDamping = [0;0];
 numberOfStationarySteps = 21;
 
 Fpert = [0;0];
-targetPos_rel = [-0.25;0]; % relative to initial hand position
+% targetPos_rel = [-0.25;0]; % relative to initial hand position
+theta = 4*45; % target angle in degrees
+targetPos_rel = 0.12*[cosd(theta);sind(theta)]; % relative to initial hand position % for center out 12 cm is good. for cup task 25 cm
 
 %% the control-oriented model for the robot MPC
 withRobot_com = 1;
@@ -24,17 +27,19 @@ hmn_com = Human_COM(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, ...
 
 %% Actual human-robot model
 withRobot = 1;
-runTimeNoiseFactor = 0;
+runTimeNoiseFactor = 1;
 hmn = Human(dt, tEnd, thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0, ...
             a_0, targetPos_rel, armDamping, numberOfStationarySteps, Fpert,'synergies.mat',withRobot, runTimeNoiseFactor, hmn_com);
 
+for iter = 1:1
+    hmn.resetStates(thetaEL_0, omegaEL_0, thetaSH_0, omegaSH_0,a_0);
+    results = hmn.simulateHuman(figure(999));
 
-results = hmn.simulateHuman();
-
-save("human-"+string(datetime('now'),'yyyy-MM-d HH-mm-ss')+".mat",'hmn')
+    % save("human-"+string(datetime('now'),'yyyy-MM-d HH-mm-ss')+".mat",'hmn')
 
 
-
+%     centerOutResults.("deg"+theta)(iter) = copy(hmn);
+end
 %%
 Y_msk = results.msk_Ydata;
 U_msk = results.msk_Udata;
@@ -105,123 +110,25 @@ legend(ha200(2,3),'Muscle x','Muscle y','Location','best','color','white','box',
 
 
 plot(ha200(3,2),(1:nStep)*dt,[Xest_ofc(:,7:8),results.rc_com_XEstData(:,7:8)])
+legend(ha200(3,2),"internal model x","internal model y", "com internal model x", "com internal model y")
+title(ha200(3,2),"estimated perturbation force");
+
 
 plot(ha200(3,3),(1:nStep)*dt, results.msk_F_interData)
+title(ha200(3,3),"actual interaction force");
+% plot(ha200(3,3),(1:nStep)*dt,[X_ofc(:,[9:10]),Xest_ofc(:,[9:10])])
+% plot(ha200(3,3),(1:nStep)*dt,results.pendulumStates(:,1:2),LineWidth=2)
+% title(ha200(3,3),"estimated pendulum states");
 
 
 figure(400)
 plot((1:nStep)*dt,results.rc_Udata)
+% plot((1:nStep)*dt,results.pendulumStates)
 title('robot torques')
+% title('pendulum states')
 xlim([0,tEnd])
 
 
 
 return
-
-%% IROS figure
-fileName = 'humanAlone';
-% fileName = 'humanWithRobotOff';
-% fileName = 'humanWithRobotOn';
-% fileName = 'humanWithRobotOnPertOnUnexpected';
-% fileName = 'humanWithRobotOnPertOnExpected';
-% fileName = 'humanWithRobotImpedance';
-load([fileName '.mat']);
-results = hmn.results;
-
-Y_msk = results.msk_Ydata;
-U_msk = results.msk_Udata;
-X_msk = results.msk_Xdata;
-
-nStep = hmn.generalParamSet.nStep;
-dt = hmn.generalParamSet.dt;
-
-X_ofc = results.mc_Xdata;
-Xest_ofc = results.mc_XEstdata;
-targetPos_abs = hmn.generalParamSet.targetPos_abs;
-
-
-hf300 = figure(300); clf
-ha300 = tightSubplot(7,1,0.05,0.02,0.12,0.05,0.1,0.05);
-hold(ha300, "on")
-box(ha300,"on")
-xlim(ha300,[0 1])
-
-
-
-
-% plot(hf300(1,1),(1:nStep)*dt, X_ofc(:,1:2)+targetPos_abs','-','LineWidth',2)
-% plot(hf300(1,1),(1:nStep)*dt, X_ofc(:,3:4),'-','LineWidth',2)
-plot(ha300(1,1),(1:nStep)*dt, Xest_ofc(:,1:2)+targetPos_abs','LineWidth',2)
-plot(ha300(1,1),(1:nStep)*dt, Xest_ofc(:,3:4),'-','LineWidth',2)
-% plot(hf300(1,1),(1:nStep)*dt, hmn.msk.getOutputs(Y_msk).hand_p)
-% plot(hf300(1,1),(1:nStep)*dt, hmn.msk.getOutputs(Y_msk).hand_v)
-legend(ha300(1,1),'Pos_x','Pos_y','Vel_x','Vel_y','Location','best','NumColumns',2,'color','none','box','off')
-title(ha300(1,1),"'Abstract' task space")
-ylim(ha300(1,1),[-0.5 0.5])
-
-
-
-% plot(ha300(2,1),(1:nStep)*dt, X_ofc(:,5:6),'--')
-plot(ha300(2,1),(1:nStep)*dt, Xest_ofc(:,5:6),'LineWidth',2)
-title(ha300(2,1),"'Abstract' neural excitation")
-legend(ha300(2,1),'Muscle x','Muscle y','Location','best','color','none','box','off')
-ylim(ha300(2,1),[-5 15]*1e-3)
-
-
-plot(ha300(3,1),(1:nStep)*dt,results.msk_synergyData,'LineWidth',2)
-title(ha300(3,1),'Synerg activations')
-legend(ha300(3,1),'Syn 1','Syn 2','Syn 3','Syn 4','NumColumns',2,'Location','best','color','none','box','off')
-ylim(ha300(3,1),[0 0.3])
-
-
-
-plot(ha300(4,1),(1:nStep-1)*dt,U_msk,'LineWidth',2)
-title(ha300(4,1),'Neural excitations')
-legend(ha300(4,1),'TRI bi','BIC','Tri uni','BRD','DLT pst','DLT ant','NumColumns',2,'Location','best','color','none','box','off')
-ylim(ha300(4,1),[0 0.1])
-
-
-plot(ha300(5,1),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).muscleF,'LineWidth',2)
-title(ha300(5,1),'Muscle forces (N)')
-legend(ha300(5,1),'TRI bi','BIC','Tri uni','BRD','DLT pst','DLT ant','NumColumns',2,'Location','best','color','none','box','off')
-ylim(ha300(5,1),[0 100])
-
-
-
-plot(ha300(6,1),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_p,'LineWidth',2)
-plot(ha300(6,1),(1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_v,'LineWidth',2)
-title(ha300(6,1),"Physical task space")
-legend(ha300(6,1),'Pos_x','Pos_y','Vel_x','Vel_y','Location','best','NumColumns',2,'color','none','box','off')
-ylim(ha300(6,1),[-0.5 0.5])
-
-
-if contains(fileName,'WithRobot')
-    plot(ha300(7,1),(1:nStep)*dt,results.rc_Udata,'LineWidth',2)
-    title(ha300(7,1),"Robot torques")
-    legend(ha300(7,1),'T_1','T_2','Location','best','NumColumns',2,'color','none','box','off')
-    xlabel(ha300(7,1),'Time (s)')
-    ylim(ha300(7,1),[-4,2])
-else
-    xlabel(ha300(6,1),'Time (s)')
-    delete(ha300(7,1))
-    ha300 = ha300(1:end-1);
-end
-
-if ~ (strcmpi(fileName,'humanAlone'))
-    [ha300.YTickLabel] = deal([]);
-end
-if strcmpi(fileName,'humanWithRobotOff')
-     ha300(end,1).YTickLabelMode ="auto";
-end
-
-[ha300(1:end-1,:).XTickLabel] = deal([]);
-
-fontsize = 7;
-setFontSize(hf300,fontsize)
-
-saveFig(1.55,7,'plots',fileName,'pdf',hf300,false)
-
-% plot(hf300(3,2),(1:nStep)*dt,[Xest_ofc(:,7:8),results.rc_com_XEstData(:,7:8)])
-% 
-% plot(hf300(3,3),(1:nStep)*dt, results.msk_F_interData)
 

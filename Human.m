@@ -134,20 +134,56 @@
                 [~,~,coeff] = hmn.msk.acceleration2activation(hmn.results.msk_currentY, a_ref_mc, Fpert_est);
                 
 
-% % % % % % % %                 THIS IS OPTIMAL MOTOR TORQUE
-%                 j = mod(i-1,1);
-%                 if j==0
-%                     [tau,com_cp] = hmn.rc.solveRobotTorque_optimal(i, hmn.getCurrentStates());
-%                 end
-%                 hmn.msk.environment.robotTorque = tau(:,j+1);
+%%%%%%%%%%%%%%%%%         THIS IS OPTIMAL MOTOR TORQUE
+                % j = mod(i-1,1);
+                % if j==0
+                %     [tau,com_cp] = hmn.rc.solveRobotTorque_optimal(i, hmn.getCurrentStates());
+                % end
+                % hmn.msk.environment.robotTorque = tau(:,j+1);
                 
-% % % % % % % % %                 THIS IS THE PERTURBATION
-%                 if i>80
-%                     hmn.msk.environment.Fhand = [0;5];
-%                 end
-                
+%%%%%%%%%%%%%%%%%         THIS IS THE EXTERNAL PERTURBATION
+                % if i>=80 % a perturbation
+                %     hmn.msk.environment.Fhand = [2;0];
+                % end
 
-%%%%%%%%%%%%%%%%%           THIS IS TRAJECTORY FOLLOWING
+%%%%%%%%%%%%%%%%%         THIS IS ADDITIONAL ENVIRONMENT
+                % mskOutputs_tmp = hmn.msk.getOutputs();
+                % hand_acc = mskOutputs_tmp.hand_a;
+                % if ~exist('pendulum_x_Ang','var')% first loop iteration 
+                %     pendulum_x_Ang = 0;
+                %     pendulum_x_Vel = 0;
+                %     pendulum_x_Acc = 0;
+                %     pendulum_y_Ang = 0;
+                %     pendulum_y_Vel = 0;
+                %     pendulum_y_Acc = 0;
+                %     pendStatesLog = zeros(hmn.generalParamSet.nStep,4);
+                %     pendStatesLog(i,:) = [pendulum_x_Ang;pendulum_y_Ang;pendulum_x_Vel;pendulum_y_Vel];
+                %     m_cart = hmn.mc.internalModel.parameters.mc; % total of m_hand+m_cart
+                %     m_pend = hmn.mc.internalModel.parameters.mp;
+                %     l_pend = hmn.mc.internalModel.parameters.l;
+                %     gravity = hmn.mc.internalModel.parameters.g;
+                %     pengulum_G = hmn.mc.internalModel.parameters.G; % "agility factor" for the pendulum
+                % end
+                % % pendulum_x_Force = (m_pend+m_cart)*hand_acc(1) - m_pend*l_pend*(pendulum_x_Vel^2*sin(pendulum_x_Ang) - pendulum_x_Acc*cos(pendulum_x_Ang)); % nonlinear pendulum
+                % % pendulum_x_Acc = -gravity/l_pend*sin(pendulum_x_Ang) - pengulum_G/l_pend*hand_acc(1)*cos(pendulum_x_Ang); % nonlinear pendulum
+                % pendulum_x_Force = (m_pend+m_cart)*hand_acc(1) + m_pend*l_pend*pendulum_x_Acc; % linear pendulum
+                % pendulum_x_Acc = -gravity/l_pend*pendulum_x_Ang - pengulum_G/l_pend*hand_acc(1); % linear pendulum
+                % 
+                % % pendulum_y_Force = (m_pend+m_cart)*hand_acc(2) - m_pend*l_pend*(pendulum_y_Vel^2*sin(pendulum_y_Ang) - pendulum_y_Acc*cos(pendulum_y_Ang)); % nonlinear pendulum
+                % % pendulum_y_Acc = -gravity/l_pend*sin(pendulum_y_Ang) - pengulum_G/l_pend*hand_acc(2)*cos(pendulum_y_Ang); % nonlinear pendulum
+                % pendulum_y_Force = (m_pend+m_cart)*hand_acc(2) + m_pend*l_pend*pendulum_y_Acc; % linear pendulum
+                % pendulum_y_Acc = -gravity/l_pend*pendulum_y_Ang - pengulum_G/l_pend*hand_acc(2); % linear pendulum
+                % 
+                % hmn.msk.environment.Fhand = -[pendulum_x_Force;pendulum_y_Force];
+                % 
+                % pendulum_x_Ang = pendulum_x_Ang + pendulum_x_Vel*dt;
+                % pendulum_x_Vel = pendulum_x_Vel + pendulum_x_Acc*dt;
+                % pendulum_y_Ang = pendulum_y_Ang + pendulum_y_Vel*dt;
+                % pendulum_y_Vel = pendulum_y_Vel + pendulum_y_Acc*dt;                
+                % 
+                % pendStatesLog(i+1,:) = [pendulum_x_Ang;pendulum_y_Ang;pendulum_x_Vel;pendulum_y_Vel];
+
+%%%%%%%%%%%%%%%%%           THIS IS IMPEDANCE CONTROL
 %                 if ~exist('trajectory','var'), load("normalTrajectory.mat"); end
 %                 try 
 %                     sp_p = trajectory.hand_p(i+1,:)';
@@ -160,9 +196,14 @@
 %                 hmn.msk.environment.robotTorque = tau;
                 
 
-%%%%%%%%%%%%%%                 THIS IS HAPTIC EFFECT
-%                 tau = hmn.rc.solveRobotTorque_hapticForce([0;0], hmn.msk);
-%                 hmn.msk.environment.robotTorque = tau;
+%%%%%%%%%%%%%%                 THIS IS OTHER HAPTIC EFFECT / FORCE FIELD
+                F_robot_des = [0;0]; % fully transparent robot
+                % hand_v = hmn.msk.getOutputs(hmn.results.msk_currentY).hand_v;
+                % F_robot_des = 3*[0 -1 ; 1 0]*hand_v; % velocity-dependent force field
+                tau = hmn.rc.solveRobotTorque_hapticForce(F_robot_des, hmn.msk);
+                hmn.msk.environment.robotTorque = tau;
+
+%%%%%%%%%%%%%% END OF ALL ROBOT CONTROL MODES
 
                 F_inter = hmn.msk.getInteractionForce();
 
@@ -225,6 +266,7 @@
             hmn.results.mc_XEstdata = hmn.results.mc_XEstdata(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
             hmn.results.rc_com_XEstData = hmn.results.rc_com_XEstData(:,1:hmn.mc.ofc.systemEq.numberOfOriginalStates);
             results = hmn.results; 
+            if exist('pendStatesLog','var'), results.pendulumStates = pendStatesLog; end
         end
         %% GET FULL STATE OF THE HUMAN MODEL
         function currentStates = getCurrentStates(hmn)

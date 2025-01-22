@@ -136,10 +136,31 @@
                 Fpert_est = hmn.mc.internalStates.XEst(7:8);
                 [~,~,coeff] = hmn.msk.acceleration2activation(hmn.results.msk_currentY, a_ref_mc, Fpert_est);
                 
-                % THIS IS THE PERTURBATION
-                if i>80
-                    hmn.msk.environment.Fhand = [0;5];
+%%%%%%%%%%%%%%%%    THIS IS THE PERTURBATION/environment
+                % if i>=80 % a perturbation
+                %     hmn.msk.environment.Fhand = [0;0];
+                % end
+
+                mskOutputs_tmp = hmn.msk.getOutputs();
+                hand_acc = mskOutputs_tmp.hand_a(1);
+                if ~exist('pendulumAng','var')% first loop iteration 
+                    pendulumAng = 0;
+                    pendulumVel = 0;
+                    pendulumAcc = 0;
+                    pendStatesLog = zeros(hmn.generalParamSet.nStep,2);
+                    pendStatesLog(i,:) = [pendulumAng,pendulumVel];
+                    m_cart = hmn.mc.internalModel.parameters.mc; % total of m_hand+m_cart
+                    m_pend = hmn.mc.internalModel.parameters.mp;
+                    l_pend = hmn.mc.internalModel.parameters.l;
+                    gravity = hmn.mc.internalModel.parameters.g;
+                    pengulum_G = hmn.mc.internalModel.parameters.G; % "agility factor" for the pendulum
                 end
+                % pendulumForce = (m_pend+m_cart)*hand_acc - m_pend*l_pend*(pendulumVel^2*sin(pendulumAng) - pendulumAcc*cos(pendulumAng)); % nonlinear pendulum
+                % pendulumAcc = -gravity/l_pend*sin(pendulumAng) - pengulum_G/l_pend*hand_acc*cos(pendulumAng); % nonlinear pendulum
+                pendulumForce = (m_pend+m_cart)*hand_acc + m_pend*l_pend*pendulumAcc; % linear pendulum
+                pendulumAcc = -gravity/l_pend*pendulumAng - pengulum_G/l_pend*hand_acc; % linear pendulum
+                hmn.msk.environment.Fhand = [-pendulumForce;0];
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ENF OF PERTURBATION/environment
 
                 hmn.msk.environment.robotTorque = tauData(:,i);
                 F_inter = hmn.msk.getInteractionForce();

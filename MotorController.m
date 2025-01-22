@@ -1,34 +1,45 @@
 classdef MotorController < matlab.mixin.Copyable
 
     properties
-        ofc
-        param
-        internalStates
+        ofc % contains control parameters and discreatized delayed system eqs
+        param % high-level parameters for the motor controller
+        internalModel % contains parameters and continious-time system eqs
+        internalStates % states of the internal model (including delayed copies)
     end
 
     methods 
         %% CONSTRUCTOR
         function mc = MotorController(dt,tEnd, numberOfStationarySteps, startPosition, Fpert, runTimeNoiseFactor)
-            mc = setupOFC(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
+            mc = setupInternalModel(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert);
+            mc = setupOFC(mc);
             mc.param.runTimeNoiseFactor = runTimeNoiseFactor;
         end
     %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % METHODS
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
-        %% SETUP OFC
-        function mc = setupOFC(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
+        %% SETUP INTERNAL MODEL
+        function mc = setupInternalModel(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
             [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_pointMass_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
-            mc.ofc = OFC(A,B,H,Q,R,simSetting,noiseStructure);
-            mc.param = modelParam;
-            mc.param.xInit = xInit;
+            % [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_cupTask_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
 
+            mc.internalModel.parameters = modelParam;
+            mc.internalModel.xInit = xInit;            
+            mc.internalModel.A = A;
+            mc.internalModel.B = B;
+            mc.internalModel.H = H;
+            mc.param.Q = Q;
+            mc.param.R = R;
+            mc.param.simSetting = simSetting;
+            mc.param.noiseStructure = noiseStructure;
+        end
+        %% SETUP OFC
+        function mc = setupOFC(mc)
+            mc.ofc = OFC(mc.internalModel.A,mc.internalModel.B,mc.internalModel.H,mc.param.Q,mc.param.R,mc.param.simSetting,mc.param.noiseStructure);
             [mc.param.L,mc.param.K] = mc.ofc.getOptimalGains;
             
-            h = mc.ofc.simSetting.delay;
-            m = mc.ofc.systemEq.numberOfControls;
-            mc.internalStates.X = repmat(xInit,h+1,1);
+            mc.internalStates.X = repmat(mc.internalModel.xInit,1+mc.ofc.simSetting.delay,1);
             mc.internalStates.XEst = mc.internalStates.X;
-            mc.internalStates.U = zeros(m,1);
+            mc.internalStates.U = zeros(mc.ofc.systemEq.numberOfControls,1);
             mc.internalStates.timeIndex = 1;
         end
 
@@ -98,8 +109,9 @@ classdef MotorController < matlab.mixin.Copyable
         function y = updateFeedback(mc, mskOutputs, targetPos_abs, Fpert)
             handPos = mskOutputs.hand_p - targetPos_abs;
             handVel = mskOutputs.hand_v;
-            y = [handPos; handVel; mc.internalStates.X(5:6); Fpert];
-            
+            y = [handPos; handVel; mc.internalStates.X(5:6); Fpert]; % for point mass
+            % y = [handPos; handVel; mc.internalStates.X(5:6); Fpert; mc.internalStates.X(9:12)]; % for cup task
+
             % reading from the internal model
 %             H = mc.ofc.systemEq.H;
 %             y = H*mc.internalStates.X;
@@ -108,7 +120,7 @@ classdef MotorController < matlab.mixin.Copyable
         function resetStates(mc)
             h = mc.ofc.simSetting.delay;
             m = mc.ofc.systemEq.numberOfControls;
-            mc.internalStates.X = repmat(mc.param.xInit,h+1,1);
+            mc.internalStates.X = repmat(mc.internalModel.xInit,h+1,1);
             mc.internalStates.XEst = mc.internalStates.X;
             mc.internalStates.U = zeros(m,1);
             mc.internalStates.timeIndex = 1;

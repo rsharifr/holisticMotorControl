@@ -1,0 +1,3 @@
+[submodule "MATLAB_handy_functions"]
+	path = MATLAB_handy_functions
+	url = https://github.com/rsharifr/MATLAB_handy_functions.git
