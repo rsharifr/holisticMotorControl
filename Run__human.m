@@ -3,7 +3,7 @@ clc
 addpath("MATLAB_handy_functions\")
 %% basic parameters and initial conditions
 dt = 5e-3; % in seconds
-tEnd = 1.; % in seconds
+tEnd = 1.4; % in seconds
 
 thetaSH_0 = 0.5; % 0.2 human-aware control. 0.5 for center out
 omegaSH_0 = 0;
@@ -16,8 +16,8 @@ numberOfStationarySteps = 21;
 
 Fpert = [0;0];
 % targetPos_rel = [-0.25;0]; % relative to initial hand position
-theta = 4*45; % target angle in degrees
-targetPos_rel = 0.12*[cosd(theta);sind(theta)]; % relative to initial hand position % for center out 12 cm is good. for cup task 25 cm
+theta = 0*45; % target angle in degrees
+targetPos_rel = 0.25*[cosd(theta);sind(theta)]; % relative to initial hand position % for center out 12 cm is good. for cup task 25 cm
 
 %% the control-oriented model for the robot MPC
 withRobot_com = 1;
@@ -114,15 +114,23 @@ legend(ha200(3,2),"internal model x","internal model y", "com internal model x",
 title(ha200(3,2),"estimated perturbation force");
 
 
-plot(ha200(3,3),(1:nStep)*dt, results.msk_F_interData)
-title(ha200(3,3),"actual interaction force");
+% plot(ha200(3,3),(1:nStep)*dt, results.msk_F_interData)
+% title(ha200(3,3),"actual interaction force");
 % plot(ha200(3,3),(1:nStep)*dt,[X_ofc(:,[9:10]),Xest_ofc(:,[9:10])])
-% plot(ha200(3,3),(1:nStep)*dt,results.pendulumStates(:,1:2),LineWidth=2)
-% title(ha200(3,3),"estimated pendulum states");
+plot(ha200(3,3),(1:nStep)*dt,results.pendulumStates(:,1:2),LineWidth=2)
+title(ha200(3,3),"estimated pendulum states");
 
 
 figure(400)
 plot((1:nStep)*dt,results.rc_Udata)
+% plot((1:nStep)*dt,results.pendulumStates)
+title('robot torques')
+% title('pendulum states')
+xlim([0,tEnd])
+
+
+figure(500)
+plot((1:nStep)*dt,hmn.msk.getOutputs(Y_msk).hand_p(:,1)- hmn.msk.getOutputs(Y_msk).hand_p(1,1),'LineWidth',2)
 % plot((1:nStep)*dt,results.pendulumStates)
 title('robot torques')
 % title('pendulum states')

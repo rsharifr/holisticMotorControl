@@ -56,7 +56,7 @@ sensoryDelay = 1*0.05; % in seconds
 c = 0.2; % multiplicative noise factor for control-dependent noise
 d = 0; % multiplicative noise factor for state-dependent noise
 omega = 1e-6; % sensory noise factor 
-eta = 1e-9; % internal noise factor
+eta = 0*1e-9; % internal noise factor
 xi = 1e-8; % process noise (affects only control-affected states)
 
 %% %%%%%%%%% Initial condition and penalties %%%%%%%%%%%

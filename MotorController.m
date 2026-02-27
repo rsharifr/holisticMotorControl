@@ -19,8 +19,8 @@ classdef MotorController < matlab.mixin.Copyable
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
         %% SETUP INTERNAL MODEL
         function mc = setupInternalModel(mc,dt,tEnd, numberOfStationarySteps, startPosition, Fpert)
-            [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_pointMass_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
-            % [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_cupTask_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
+            % [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_pointMass_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
+            [A,B,H,Q,R,simSetting,noiseStructure,xInit,modelParam] = setupInternalModel_cupTask_effort(startPosition, dt, tEnd, numberOfStationarySteps,Fpert);
 
             mc.internalModel.parameters = modelParam;
             mc.internalModel.xInit = xInit;            
@@ -109,8 +109,8 @@ classdef MotorController < matlab.mixin.Copyable
         function y = updateFeedback(mc, mskOutputs, targetPos_abs, Fpert)
             handPos = mskOutputs.hand_p - targetPos_abs;
             handVel = mskOutputs.hand_v;
-            y = [handPos; handVel; mc.internalStates.X(5:6); Fpert]; % for point mass
-            % y = [handPos; handVel; mc.internalStates.X(5:6); Fpert; mc.internalStates.X(9:12)]; % for cup task
+            % y = [handPos; handVel; mc.internalStates.X(5:6); Fpert]; % for point mass
+            y = [handPos; handVel; mc.internalStates.X(5:6); Fpert; mc.internalStates.X(9:12)]; % for cup task
 
             % reading from the internal model
 %             H = mc.ofc.systemEq.H;
